@@ -1,0 +1,72 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Native Windows desktop app (WPF, .NET Framework 4.8 — the runtime the Sage
+    Estimating SDK targets). References the portable Core library for all shape
+    data, area math, and routing.
+
+    ==========================================================================
+    SAGE SDK WIRING (see README "Wiring the SDK")
+      * SageSdkDir below points at the Sage Estimating SDK 25.2 "Binaries"
+        folder. Override it per-machine without editing this file:
+            msbuild /p:SageSdkDir="D:\path\to\Binaries\"
+      * Defining SAGE_SDK compiles the real connector body. Clear it to fall
+        back to the built-in mock connector (Dry run), which needs no SDK.
+      * x64 is REQUIRED: the SDK ships x64-only, and the shipped samples build
+        x64. An AnyCPU/32-bit build fails at load with a BadImageFormatException.
+    ==========================================================================
+  -->
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>SteelCoatingTakeoff.App</RootNamespace>
+    <AssemblyName>SteelCoatingTakeoff</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <PlatformTarget>x64</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+
+  <!-- Location of the Sage Estimating SDK assemblies. -->
+  <PropertyGroup Condition="'$(SageSdkDir)' == ''">
+    <SageSdkDir>C:\00 - Program Installs\SDK\SDK - 25.2\Sage.Estimating.Sdk.25.2.2510.091\Binaries\</SageSdkDir>
+  </PropertyGroup>
+
+  <!-- Compile the live connector only when the SDK is actually present, so a
+       machine without it still gets a working Dry-run build. -->
+  <PropertyGroup Condition="Exists('$(SageSdkDir)Sage.Estimating.Sdk.dll')">
+    <DefineConstants>$(DefineConstants);SAGE_SDK</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup Condition="Exists('$(SageSdkDir)Sage.Estimating.Sdk.dll')">
+    <!-- Private=false: the SDK has a large web of sibling dependencies, so it is
+         resolved at runtime from SageSdkDir by the hook in App.xaml.cs rather
+         than copied piecemeal into the output folder. -->
+    <Reference Include="Sage.Estimating.Sdk">
+      <HintPath>$(SageSdkDir)Sage.Estimating.Sdk.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- Bake the SDK path into the build so the runtime resolver knows where to
+       look without hard-coding it in source. -->
+  <ItemGroup Condition="Exists('$(SageSdkDir)Sage.Estimating.Sdk.dll')">
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>SageSdkDir</_Parameter1>
+      <_Parameter2>$(SageSdkDir)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SteelCoatingTakeoff.Core\SteelCoatingTakeoff.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

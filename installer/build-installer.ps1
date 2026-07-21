@@ -44,17 +44,23 @@ foreach ($f in "SteelCoatingTakeoff.exe","SteelCoatingTakeoff.exe.config","Steel
 }
 Copy-Item (Join-Path $SdkDir "*") (Join-Path $stage "Sdk") -Recurse -Force
 
-Write-Host "3/4  Compiling installer (Inno Setup)..."
-if (Test-Path $target) { Remove-Item $target -Force }
+Write-Host "3/4  Compiling installers (Inno Setup)..."
+$targetUser = Join-Path $dist "SteelCoatingTakeoffSetup-NoAdmin.exe"
+foreach ($t in @($target, $targetUser)) { if (Test-Path $t) { Remove-Item $t -Force } }
+
+# a) admin build -> Program Files
 & $iscc "/DAppVersion=$AppVersion" "/DStageDir=$stage" "/DOutDir=$dist" $iss | Out-Null
-if ($LASTEXITCODE -ne 0) { throw "ISCC failed with exit code $LASTEXITCODE" }
+if ($LASTEXITCODE -ne 0) { throw "ISCC (admin) failed with exit code $LASTEXITCODE" }
+
+# b) per-user build -> LocalAppData, no admin / no UAC
+& $iscc "/DPerUser" "/DAppVersion=$AppVersion" "/DStageDir=$stage" "/DOutDir=$dist" $iss | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "ISCC (per-user) failed with exit code $LASTEXITCODE" }
 
 Write-Host "4/4  Cleaning staging..."
 Remove-Item (Join-Path $dist "stage") -Recurse -Force
 
-if (Test-Path $target) {
-  $mb = [math]::Round((Get-Item $target).Length/1MB,1)
-  Write-Host "DONE -> $target  ($mb MB)"
-} else {
-  throw "Installer was not produced."
+foreach ($t in @($target, $targetUser)) {
+  if (-not (Test-Path $t)) { throw "Installer was not produced: $t" }
+  $mb = [math]::Round((Get-Item $t).Length/1MB,1)
+  Write-Host ("DONE -> {0}  ({1} MB)" -f $t, $mb)
 }

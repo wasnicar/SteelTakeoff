@@ -18,23 +18,37 @@
   #define OutDir       "..\dist"
 #endif
 
+; Two builds from this one script:
+;   (default)   admin install into Program Files  -> SteelCoatingTakeoffSetup.exe
+;   /DPerUser   no-admin install into LocalAppData -> SteelCoatingTakeoffSetup-NoAdmin.exe
+; They carry different AppIds so both can exist without fighting over one
+; Add/Remove Programs entry.
 [Setup]
+#ifdef PerUser
+AppId={{C7A4E913-25D8-4F60-B1A7-6E9D48C3502F}
+DefaultDirName={localappdata}\Programs\{#AppName}
+OutputBaseFilename=SteelCoatingTakeoffSetup-NoAdmin
+; No elevation: installs for the current user only, no UAC prompt, no admin rights.
+PrivilegesRequired=lowest
+UninstallDisplayName={#AppName} (per-user)
+#else
 AppId={{8E1C2F4A-7B93-4D62-9E4B-2C5A7D3F1B08}
+DefaultDirName={autopf}\{#AppName}
+OutputBaseFilename=SteelCoatingTakeoffSetup
+; Program Files needs admin; this also puts the UAC shield on the setup exe.
+PrivilegesRequired=admin
+UninstallDisplayName={#AppName}
+#endif
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
 AppPublisher={#AppPublisher}
-DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
-UninstallDisplayName={#AppName}
 UninstallDisplayIcon={app}\{#AppExeName}
 OutputDir={#OutDir}
-OutputBaseFilename=SteelCoatingTakeoffSetup
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
-; Program Files needs admin; this also puts the UAC shield on the setup exe.
-PrivilegesRequired=admin
 ; The app and the bundled Sage SDK are x64.
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible

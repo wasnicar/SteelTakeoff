@@ -1,12 +1,25 @@
 # Installer
 
-`dist\SteelCoatingTakeoffSetup.exe` is a real Windows installer built with **Inno Setup**.
-It is UAC-elevated, installs to **Program Files**, and registers a proper uninstaller.
+Two installers are built from the same Inno Setup script — pick based on whether you have
+admin rights on the target machine.
+
+| File | Installs to | Admin needed |
+|---|---|---|
+| `dist\SteelCoatingTakeoffSetup.exe` | `C:\Program Files\Steel Coating Takeoff\` | **Yes** (UAC prompt) |
+| `dist\SteelCoatingTakeoffSetup-NoAdmin.exe` | `%LOCALAPPDATA%\Programs\Steel Coating Takeoff\` | **No** |
+
+Both bundle the Sage SDK, register an uninstaller in Add/Remove Programs (per-machine vs
+per-user hive), and create Start Menu + optional Desktop shortcuts. They carry different
+AppIds, so they can coexist without fighting over one uninstall entry.
+
+**Use the `-NoAdmin` build when you cannot elevate on the server.** It is a normal
+per-user install — no UAC prompt, nothing written outside the user's profile. (It replaces
+the old IExpress self-extractor, which had no uninstaller and whose extractor process kept
+the setup .exe locked against deletion.)
 
 ## What it does
 
-- Installs to `C:\Program Files\Steel Coating Takeoff\` (requires admin — the setup exe
-  carries the UAC shield)
+- Installs to Program Files (admin build) or `%LOCALAPPDATA%\Programs` (no-admin build)
 - Ships the WPF app plus the **bundled Sage Estimating SDK 25.2** under `.\Sdk\`, which the
   app resolves at runtime (`App.xaml.cs` probes `SAGE_SDK_DIR`, then `.\Sdk`, then the
   build-time path)
@@ -14,6 +27,7 @@ It is UAC-elevated, installs to **Program Files**, and registers a proper uninst
 - Registers in **Add/Remove Programs** ("Steel Coating Takeoff", publisher Asnicar &
   Associates) with a working uninstaller
 - Silent install supported: `SteelCoatingTakeoffSetup.exe /VERYSILENT /NORESTART`
+  (same switches work for the `-NoAdmin` build)
 
 ## Where settings live
 

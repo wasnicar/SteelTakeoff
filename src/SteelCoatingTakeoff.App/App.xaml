@@ -200,29 +200,26 @@
             <Setter Property="BorderBrush" Value="{StaticResource LineStrong}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Background" Value="{StaticResource Panel}"/>
-            <Setter Property="Padding" Value="9,7"/>
+            <!-- Horizontal padding only. Vertical padding squeezes PART_ContentHost in
+                 short containers (DataGrid cells) and clips the glyphs to slivers;
+                 MinHeight + VerticalContentAlignment centres the text instead. -->
+            <Setter Property="Padding" Value="9,0"/>
+            <Setter Property="MinHeight" Value="30"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="TextBox">
-                        <Border x:Name="bd" Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8" SnapsToDevicePixels="True">
-                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource Blue500}"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="bd" Property="Background" Value="{StaticResource Surface2}"/>
-                                <Setter Property="Foreground" Value="{StaticResource Muted}"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
+            <!-- NOTE: deliberately NO custom ControlTemplate. A hand-rolled template
+                 (rounded Border + PART_ContentHost) renders fine standalone but gets its
+                 content host squeezed inside DataGrid cells, clipping typed digits to
+                 invisible slivers. The stock template is used instead; inputs are square
+                 rather than rounded, which is a fair trade for text that always shows. -->
+            <Style.Triggers>
+                <Trigger Property="IsKeyboardFocused" Value="True">
+                    <Setter Property="BorderBrush" Value="{StaticResource Blue500}"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Background" Value="{StaticResource Surface2}"/>
+                    <Setter Property="Foreground" Value="{StaticResource Muted}"/>
+                </Trigger>
+            </Style.Triggers>
         </Style>
 
         <!-- Light ComboBox styling (colors/padding only; keeps native dropdown) -->
@@ -287,18 +284,21 @@
             </Style.Triggers>
         </Style>
 
+        <!-- Setters only, no custom Template: replacing the DataGridCell template
+             breaks text rendering for editable controls hosted in cells. Keep the
+             stock template and just neutralise the selection colours. -->
         <Style TargetType="DataGridCell">
             <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+            <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="DataGridCell">
-                        <Border Background="Transparent" Padding="0" SnapsToDevicePixels="True">
-                            <ContentPresenter VerticalAlignment="Center"/>
-                        </Border>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="Transparent"/>
+                    <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+                    <Setter Property="BorderBrush" Value="Transparent"/>
+                </Trigger>
+            </Style.Triggers>
         </Style>
     </Application.Resources>
 </Application>

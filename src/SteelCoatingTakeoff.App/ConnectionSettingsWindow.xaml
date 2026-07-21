@@ -17,17 +17,38 @@
         <Border Grid.Row="0" Style="{StaticResource Card}">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel>
-                    <TextBlock Text="SAGE CONNECTION" Style="{StaticResource H2}"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="SAGE CONNECTION" Style="{StaticResource H2}"/>
+                        <Button Grid.Column="1" Content="Detect" Command="{Binding DetectCommand}"
+                                Padding="10,3" Margin="0,0,0,8"
+                                ToolTip="Search this machine and the network for SQL Server instances, then read the Sage databases and estimates."/>
+                    </Grid>
+                    <TextBlock Text="{Binding DiscoveryStatus}" Foreground="{StaticResource Muted}"
+                               FontSize="10" Margin="0,0,0,6" TextWrapping="Wrap"/>
 
                     <TextBlock Text="SQL Server" Style="{StaticResource FieldLabel}"/>
-                    <TextBox Text="{Binding Settings.SqlServer}"
-                             ToolTip="Instance holding the estimates DB, e.g. WILLS-LAPTOP\SAGE_EST25."/>
+                    <ComboBox ItemsSource="{Binding SqlInstances}" IsEditable="True"
+                              Text="{Binding SqlServer, UpdateSourceTrigger=LostFocus}"
+                              ToolTip="Pick a discovered instance, or type one. Changing it re-reads the databases."/>
+
                     <TextBlock Text="Estimating database" Style="{StaticResource FieldLabel}"/>
-                    <TextBox Text="{Binding Settings.Database}"/>
+                    <ComboBox ItemsSource="{Binding EstimateDatabases}" DisplayMemberPath="Display"
+                              SelectedValuePath="Name" SelectedValue="{Binding Database}"
+                              ToolTip="Estimate databases found on the selected server. Changing it re-reads the estimates."/>
+
                     <TextBlock Text="Standard database (assemblies)" Style="{StaticResource FieldLabel}"/>
-                    <TextBox Text="{Binding Settings.StandardDatabase}"/>
+                    <ComboBox ItemsSource="{Binding StandardDatabases}" DisplayMemberPath="Display"
+                              SelectedValuePath="Name" SelectedValue="{Binding StandardDatabase}"
+                              ToolTip="Standard databases (where the assemblies live) found on the selected server."/>
+
                     <TextBlock Text="Estimate name" Style="{StaticResource FieldLabel}"/>
-                    <TextBox Text="{Binding Settings.EstimateName}"/>
+                    <ComboBox ItemsSource="{Binding Estimates}" IsEditable="True"
+                              Text="{Binding EstimateName, UpdateSourceTrigger=LostFocus}"
+                              ToolTip="Estimates inside the selected estimating database."/>
 
                     <Grid Margin="0,14,0,0">
                         <Grid.ColumnDefinitions>

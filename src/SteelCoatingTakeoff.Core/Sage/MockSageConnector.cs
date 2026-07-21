@@ -76,6 +76,31 @@ namespace SteelCoatingTakeoff.Core.Sage
             return result;
         }
 
+        public SageInstanceListResult ListSqlInstances()
+        {
+            var r = SageInstanceListResult.Ok();
+            r.Message = "Mock instances (no Sage connection).";
+            r.Instances.Add("(local)\\SAGE_EST25");
+            return r;
+        }
+
+        public SageDatabaseListResult ListDatabases(SageSettings settings)
+        {
+            var r = SageDatabaseListResult.Ok();
+            r.Message = "Mock databases (no Sage connection).";
+            r.Databases.Add(new SageDatabaseInfo { Name = "Estimates", Kind = SageDatabaseKind.Estimate, Version = "25.01.00.00030" });
+            r.Databases.Add(new SageDatabaseInfo { Name = "Sample_Standard_DB", Kind = SageDatabaseKind.Standard, Version = "25.01.00.00010" });
+            return r;
+        }
+
+        public SageEstimateListResult ListEstimates(SageSettings settings)
+        {
+            var r = SageEstimateListResult.Ok();
+            r.Message = "Mock estimates (no Sage connection).";
+            r.Estimates.Add("Sample Estimate");
+            return r;
+        }
+
         public void Commit()
         {
             _log("[MOCK] Commit (no-op).");

@@ -171,6 +171,126 @@ namespace SteelCoatingTakeoff.App.Sage
             }
         }
 
+        // ---- Discovery: populate the connection dropdowns -------------------
+
+        public SageInstanceListResult ListSqlInstances()
+        {
+            var result = SageInstanceListResult.Ok();
+            var found = new List<string>();
+
+            // Locally installed instances come from the registry — fast and reliable.
+            try
+            {
+                foreach (var i in InstanceService.ReadLocallyInstalledInstancesFromRegistry())
+                    if (!string.IsNullOrWhiteSpace(i?.Name)) found.Add(i.Name.Trim());
+            }
+            catch (Exception ex)
+            {
+                result.Message = "Local instance lookup failed: " + Describe(ex);
+            }
+
+            // Network browse (SQL Browser broadcast) can be slow or blocked; it is a
+            // bonus on top of the local list, never a reason to fail.
+            try
+            {
+                foreach (var i in InstanceService.ReadBrowsableInstances())
+                    if (!string.IsNullOrWhiteSpace(i?.Name)) found.Add(i.Name.Trim());
+            }
+            catch
+            {
+                // Broadcast blocked/unavailable — keep whatever we already have.
+            }
+
+            // Whatever is configured should still be offered even if discovery missed it.
+            foreach (var name in found
+                         .Where(n => !string.IsNullOrWhiteSpace(n))
+                         .Distinct(StringComparer.OrdinalIgnoreCase)
+                         .OrderBy(n => n, StringComparer.OrdinalIgnoreCase))
+            {
+                result.Instances.Add(name);
+            }
+
+            if (result.Instances.Count == 0 && string.IsNullOrEmpty(result.Message))
+                result.Message = "No SQL Server instances found on this machine or network.";
+            else if (string.IsNullOrEmpty(result.Message))
+                result.Message = $"{result.Instances.Count} SQL instance(s) found.";
+
+            return result;
+        }
+
+        public SageDatabaseListResult ListDatabases(SageSettings settings)
+        {
+            if (settings == null || string.IsNullOrWhiteSpace(settings.SqlServer))
+                return SageDatabaseListResult.Fail("Pick a SQL Server first.");
+            try
+            {
+                var instance = ResolveInstance(settings);
+                var service = new DBService(instance);
+                var result = SageDatabaseListResult.Ok();
+
+                foreach (var name in service.ReadDBNames())
+                {
+                    DBInfo info;
+                    try { info = service.ReadDBInfo(name); }
+                    catch { continue; }                      // not readable — skip quietly
+                    if (info?.ConnectionInfo == null) continue;   // not a Sage database
+
+                    var kind = SageDatabaseKind.Unknown;
+                    if (info.ConnectionInfo is EstimateDBConnectionInfo) kind = SageDatabaseKind.Estimate;
+                    else if (info.ConnectionInfo is StandardDBConnectionInfo) kind = SageDatabaseKind.Standard;
+                    else if (info.ConnectionInfo is AddressBookDBConnectionInfo) kind = SageDatabaseKind.AddressBook;
+                    else if (info.ConnectionInfo is ExternalReportDBConnectionInfo ||
+                             info.ConnectionInfo is ReportDesignDBConnectionInfo) kind = SageDatabaseKind.Report;
+
+                    result.Databases.Add(new SageDatabaseInfo
+                    {
+                        Name = name,
+                        Kind = kind,
+                        IsSupported = info.IsSupported,
+                        Version = info.EstimatingVersion?.ToString()
+                    });
+                }
+
+                var est = result.Databases.Count(d => d.Kind == SageDatabaseKind.Estimate);
+                var std = result.Databases.Count(d => d.Kind == SageDatabaseKind.Standard);
+                result.Message = $"{est} estimate DB(s), {std} standard DB(s) on {settings.SqlServer}.";
+                return result;
+            }
+            catch (Exception ex)
+            {
+                return SageDatabaseListResult.Fail("Could not list databases: " + Describe(ex));
+            }
+        }
+
+        public SageEstimateListResult ListEstimates(SageSettings settings)
+        {
+            if (settings == null || string.IsNullOrWhiteSpace(settings.Database))
+                return SageEstimateListResult.Fail("Pick an estimating database first.");
+            try
+            {
+                var instance = ResolveInstance(settings);
+                var estimateDB = new EstimateDBConnectionInfo(instance, settings.Database);
+                var service = new EstimateDBService(estimateDB);
+                var result = SageEstimateListResult.Ok();
+
+                foreach (var e in service.ReadEstimatesInfo()
+                             .Where(e => !e.Invalid)
+                             .OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase))
+                {
+                    result.Estimates.Add(e.Name);
+                }
+
+                result.Message = result.Estimates.Count == 0
+                    ? $"No estimates in '{settings.Database}'."
+                    : $"{result.Estimates.Count} estimate(s) in '{settings.Database}'.";
+                return result;
+            }
+            catch (Exception ex)
+            {
+                return SageEstimateListResult.Fail("Could not list estimates: " + Describe(ex));
+            }
+        }
+
         public SageTakeoffResult Takeoff(SageTakeoffRequest request)
             => TakeoffBatch(new[] { request });
 
@@ -412,6 +532,9 @@ namespace SteelCoatingTakeoff.App.Sage
         public SageTakeoffResult Takeoff(SageTakeoffRequest request) => SageTakeoffResult.Fail(NotWired);
         public SageTakeoffResult TakeoffBatch(IEnumerable<SageTakeoffRequest> requests) => SageTakeoffResult.Fail(NotWired);
         public SageAssemblyListResult ListAssemblies(SageSettings settings) => SageAssemblyListResult.Fail(NotWired);
+        public SageInstanceListResult ListSqlInstances() => SageInstanceListResult.Fail(NotWired);
+        public SageDatabaseListResult ListDatabases(SageSettings settings) => SageDatabaseListResult.Fail(NotWired);
+        public SageEstimateListResult ListEstimates(SageSettings settings) => SageEstimateListResult.Fail(NotWired);
         public void Commit() { }
         public void Dispose() { IsConnected = false; }
 #endif

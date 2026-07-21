@@ -45,22 +45,12 @@
                             </Border>
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource NavButton}" Click="OpenConnectionSettings_Click">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE774;" FontSize="15" Margin="0,0,11,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="Sage connection" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                    <Button Style="{StaticResource NavButton}" Click="OpenConnectionSettings_Click">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE71D;" FontSize="15" Margin="0,0,11,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="Assemblies" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
+                    <!-- One entry: the connection window already covers databases,
+                         assemblies and settings, so separate nav items were redundant. -->
                     <Button Style="{StaticResource NavButton}" Click="OpenConnectionSettings_Click">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE713;" FontSize="15" Margin="0,0,11,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="Settings" VerticalAlignment="Center"/>
+                            <TextBlock Text="Connection Settings" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>

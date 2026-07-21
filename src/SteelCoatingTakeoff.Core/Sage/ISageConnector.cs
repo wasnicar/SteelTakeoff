@@ -34,6 +34,23 @@ namespace SteelCoatingTakeoff.Core.Sage
         /// </summary>
         SageAssemblyListResult ListAssemblies(SageSettings settings);
 
+        // ---- Discovery: fills the connection dropdowns so nothing is typed by hand ----
+
+        /// <summary>
+        /// SQL Server instances: those installed locally plus any browsable on the
+        /// network. Read-only; needs no settings.
+        /// </summary>
+        SageInstanceListResult ListSqlInstances();
+
+        /// <summary>
+        /// Sage databases on <see cref="SageSettings.SqlServer"/>, classified so the UI
+        /// can offer estimate databases and standard databases separately.
+        /// </summary>
+        SageDatabaseListResult ListDatabases(SageSettings settings);
+
+        /// <summary>Estimate names inside <see cref="SageSettings.Database"/>.</summary>
+        SageEstimateListResult ListEstimates(SageSettings settings);
+
         /// <summary>Persist pending changes to the estimate.</summary>
         void Commit();
     }

@@ -39,6 +39,64 @@ namespace SteelCoatingTakeoff.App.ViewModels
         private string _assemblyLoadStatus = "Assemblies not loaded.";
         public string AssemblyLoadStatus { get => _assemblyLoadStatus; private set => Set(ref _assemblyLoadStatus, value); }
 
+        // ---- connection discovery (fills the Connection settings dropdowns) ----
+        public ObservableCollection<string> SqlInstances { get; } = new ObservableCollection<string>();
+        public ObservableCollection<SageDatabaseInfo> EstimateDatabases { get; } = new ObservableCollection<SageDatabaseInfo>();
+        public ObservableCollection<SageDatabaseInfo> StandardDatabases { get; } = new ObservableCollection<SageDatabaseInfo>();
+        public ObservableCollection<string> Estimates { get; } = new ObservableCollection<string>();
+
+        private string _discoveryStatus = "Click Detect to find SQL servers.";
+        public string DiscoveryStatus { get => _discoveryStatus; private set => Set(ref _discoveryStatus, value); }
+
+        public ICommand DetectCommand { get; }
+
+        /// <summary>SQL instance. Changing it re-reads the databases on that server.</summary>
+        public string SqlServer
+        {
+            get => Settings.SqlServer;
+            set
+            {
+                if (Settings.SqlServer == value) return;
+                Settings.SqlServer = value;
+                Raise(nameof(SqlServer));
+                LoadDatabases();
+            }
+        }
+
+        /// <summary>Estimating database. Changing it re-reads the estimates inside it.</summary>
+        public string Database
+        {
+            get => Settings.Database;
+            set
+            {
+                if (Settings.Database == value) return;
+                Settings.Database = value;
+                Raise(nameof(Database));
+                LoadEstimates();
+            }
+        }
+
+        public string StandardDatabase
+        {
+            get => Settings.StandardDatabase;
+            set
+            {
+                if (Settings.StandardDatabase == value) return;
+                Settings.StandardDatabase = value;
+                Raise(nameof(StandardDatabase));
+                // A different standard DB means a different assembly list.
+                AllAssemblies = new List<SageAssemblyInfo>();
+                AssemblyChoices.Clear();
+                AssemblyLoadStatus = "Assemblies not loaded.";
+            }
+        }
+
+        public string EstimateName
+        {
+            get => Settings.EstimateName;
+            set { if (Settings.EstimateName != value) { Settings.EstimateName = value; Raise(nameof(EstimateName)); } }
+        }
+
         /// <summary>Assembly names bound to the dropdowns; proxy so Browse updates reflect.</summary>
         public string IntumescentAssembly
         {
@@ -121,6 +179,7 @@ namespace SteelCoatingTakeoff.App.ViewModels
                 Log("Settings saved.");
             });
             LoadAssembliesCommand = new RelayCommand(async _ => await LoadAssembliesAsync(), _ => IsNotBusy);
+            DetectCommand = new RelayCommand(async _ => await DetectAsync(), _ => IsNotBusy);
 
             // Seed one row so the grid isn't empty on launch.
             AddRow(_db.GetFamily("W"));
@@ -153,6 +212,80 @@ namespace SteelCoatingTakeoff.App.ViewModels
             // Re-assert the current picks so the dropdowns show them now the list exists.
             Raise(nameof(IntumescentAssembly));
             Raise(nameof(StandardAssembly));
+        }
+
+        /// <summary>
+        /// Discover SQL instances (local + network), then cascade into the databases on
+        /// the selected server and the estimates inside the selected estimating DB.
+        /// Reads only — safe regardless of Dry run.
+        /// </summary>
+        private async Task DetectAsync()
+        {
+            IsBusy = true;
+            DiscoveryStatus = "Searching for SQL Server instances…";
+            try
+            {
+                var result = await Task.Run(() =>
+                {
+                    using (var conn = new SageEstimatingConnector()) return conn.ListSqlInstances();
+                });
+
+                var previous = Settings.SqlServer;
+                SqlInstances.Clear();
+                foreach (var i in result.Instances) SqlInstances.Add(i);
+                // Keep a configured server selectable even if discovery missed it.
+                if (!string.IsNullOrWhiteSpace(previous) &&
+                    !SqlInstances.Any(i => string.Equals(i, previous, StringComparison.OrdinalIgnoreCase)))
+                {
+                    SqlInstances.Insert(0, previous);
+                }
+                DiscoveryStatus = result.Message;
+                Raise(nameof(SqlServer));
+
+                if (!string.IsNullOrWhiteSpace(Settings.SqlServer)) LoadDatabases();
+            }
+            catch (Exception ex) { DiscoveryStatus = "Detect failed: " + ex.Message; }
+            finally { IsBusy = false; }
+        }
+
+        /// <summary>Read the Sage databases on the selected server into the two dropdowns.</summary>
+        private void LoadDatabases()
+        {
+            try
+            {
+                SageDatabaseListResult result;
+                using (var conn = new SageEstimatingConnector()) result = conn.ListDatabases(Settings);
+
+                EstimateDatabases.Clear();
+                StandardDatabases.Clear();
+                foreach (var db in result.Databases)
+                {
+                    if (db.Kind == SageDatabaseKind.Estimate) EstimateDatabases.Add(db);
+                    else if (db.Kind == SageDatabaseKind.Standard) StandardDatabases.Add(db);
+                }
+                DiscoveryStatus = result.Message;
+                Raise(nameof(Database));
+                Raise(nameof(StandardDatabase));
+
+                if (!string.IsNullOrWhiteSpace(Settings.Database)) LoadEstimates();
+            }
+            catch (Exception ex) { DiscoveryStatus = "Database lookup failed: " + ex.Message; }
+        }
+
+        /// <summary>Read the estimate names inside the selected estimating database.</summary>
+        private void LoadEstimates()
+        {
+            try
+            {
+                SageEstimateListResult result;
+                using (var conn = new SageEstimatingConnector()) result = conn.ListEstimates(Settings);
+
+                Estimates.Clear();
+                foreach (var e in result.Estimates) Estimates.Add(e);
+                DiscoveryStatus = result.Message;
+                Raise(nameof(EstimateName));
+            }
+            catch (Exception ex) { DiscoveryStatus = "Estimate lookup failed: " + ex.Message; }
         }
 
         /// <summary>Non-blocking load, for the "Load from Sage" button.</summary>

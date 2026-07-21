@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -12,6 +13,7 @@ using Microsoft.Win32;
 using SteelCoatingTakeoff.App.Sage;
 using SteelCoatingTakeoff.Core;
 using SteelCoatingTakeoff.Core.Model;
+using SteelCoatingTakeoff.Core.Reporting;
 using SteelCoatingTakeoff.Core.Sage;
 
 namespace SteelCoatingTakeoff.App.ViewModels
@@ -131,6 +133,23 @@ namespace SteelCoatingTakeoff.App.ViewModels
             set { if (Settings.Productivity != value) { Settings.Productivity = value; Raise(nameof(Productivity)); RepriceLabor(); } }
         }
 
+        /// <summary>
+        /// Written to Sage's L.Prod Factor column. A pass-through for the estimator: it
+        /// does not change the $/SF this tool computes, so RepriceLabor only refreshes
+        /// the shown derivation.
+        /// </summary>
+        public double LaborProductivityFactor
+        {
+            get => Settings.LaborProductivityFactor;
+            set
+            {
+                if (Settings.LaborProductivityFactor == value) return;
+                Settings.LaborProductivityFactor = value;
+                Raise(nameof(LaborProductivityFactor));
+                RepriceLabor();
+            }
+        }
+
         private void RepriceLabor()
         {
             foreach (var row in Rows) row.RefreshCalculation();
@@ -154,6 +173,7 @@ namespace SteelCoatingTakeoff.App.ViewModels
         public ICommand SendSelectedCommand { get; }
         public ICommand TestConnectionCommand { get; }
         public ICommand ExportCsvCommand { get; }
+        public ICommand ExportPdfCommand { get; }
         public ICommand SaveSettingsCommand { get; }
         public ICommand LoadAssembliesCommand { get; }
 
@@ -171,6 +191,7 @@ namespace SteelCoatingTakeoff.App.ViewModels
                                                    _ => IsNotBusy && SelectedRow != null);
             TestConnectionCommand = new RelayCommand(async _ => await TestConnectionAsync(), _ => IsNotBusy);
             ExportCsvCommand = new RelayCommand(ExportCsv, () => Rows.Count > 0);
+            ExportPdfCommand = new RelayCommand(ExportPdf, () => Rows.Count > 0);
             SaveSettingsCommand = new RelayCommand(() =>
             {
                 SettingsStore.Save(Settings);
@@ -443,6 +464,59 @@ namespace SteelCoatingTakeoff.App.ViewModels
             sb.AppendLine($"Standard area SF,{StandardArea:0.##}");
             File.WriteAllText(dlg.FileName, sb.ToString(), Encoding.UTF8);
             Log("Exported " + dlg.FileName);
+        }
+
+        /// <summary>
+        /// Clean PDF of the takeoff: member descriptions, quantities, labor and totals.
+        /// Offers to open it, since the point of exporting is usually to send it on.
+        /// </summary>
+        private void ExportPdf()
+        {
+            var dlg = new SaveFileDialog
+            {
+                FileName = SuggestedReportName(),
+                Filter = "PDF file (*.pdf)|*.pdf",
+                DefaultExt = ".pdf"
+            };
+            if (dlg.ShowDialog() != true) return;
+
+            try
+            {
+                TakeoffReport.Write(
+                    dlg.FileName,
+                    Rows.Select(r => r.ToLine()),
+                    Settings,
+                    Settings.EstimateName,
+                    DateTime.Now);
+            }
+            catch (Exception ex)
+            {
+                Log("PDF export failed: " + ex.Message);
+                MessageBox.Show("Could not write the PDF:\n\n" + ex.Message,
+                                "Export PDF", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            Log("Exported " + dlg.FileName);
+            if (MessageBox.Show("PDF saved.\n\n" + dlg.FileName + "\n\nOpen it now?",
+                                "Export PDF", MessageBoxButton.YesNo, MessageBoxImage.Information) == MessageBoxResult.Yes)
+            {
+                try { Process.Start(new ProcessStartInfo(dlg.FileName) { UseShellExecute = true }); }
+                catch (Exception ex) { Log("Could not open the PDF: " + ex.Message); }
+            }
+        }
+
+        /// <summary>"coating-takeoff-<estimate>-<date>.pdf", scrubbed of path-illegal characters.</summary>
+        private string SuggestedReportName()
+        {
+            var name = "coating-takeoff";
+            if (!string.IsNullOrWhiteSpace(Settings.EstimateName))
+            {
+                var estimate = Settings.EstimateName.Trim();
+                foreach (var bad in Path.GetInvalidFileNameChars()) estimate = estimate.Replace(bad, '-');
+                name += "-" + estimate;
+            }
+            return name + "-" + DateTime.Now.ToString("yyyyMMdd") + ".pdf";
         }
 
         private static string Csv(string s)

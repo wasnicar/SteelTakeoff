@@ -48,20 +48,46 @@ namespace SteelCoatingTakeoff.Core.Sage
         // ---- Labor ---------------------------------------------------------
         // Labor is priced from two typed inputs on the takeoff screen:
         //
-        //     Labor Rate (LR, $/SF) = Wage Rate ($/hr) / Productivity (SF/hr)
+        //     effective productivity (SF/hr) = Productivity           (standard)
+        //                                    = Productivity / (WFT / divisor)  (intumescent)
+        //     labor price ($/SF)             = Wage Rate / effective productivity
         //
-        //     standard line    : labor price/SF = LR
-        //     intumescent line : labor price/SF = (WFT / divisor) x LR x coats
+        // Thickness DIVIDES productivity: 20 mils at the default divisor of 5 turns
+        // 100 SF/hr into 25 SF/hr. Coating AREA is the same for both coating types —
+        // thickness only changes labor. Coats multiplies the area, never the rate.
         //
-        // The connector writes that price into the item's labor UnitPrice, so Sage
-        // shows labor Amount = takeoff quantity x UnitPrice. Coating AREA is the same
-        // for both types — thickness only changes labor.
+        // WHY THE PRICE IS SENT AS $/SF RATHER THAN AS WAGE + PRODUCTIVITY:
+        // The connector writes the price into the item's labor UnitPrice, giving
+        // Sage labor Amount = takeoff quantity x UnitPrice. Writing the productivity
+        // into Sage's own L.Prod column (EstimateItemCrewCostCategory.Productivity-
+        // WithFactor) was tested against a live estimate and ZEROES the labor amount:
+        // these coating items carry no crew or rate table, so productivity has no wage
+        // to multiply and Sage recalculates the line to $0. Assign a crew to the
+        // standard-database items and that route becomes available; until then the
+        // derived $/SF is the only field that produces correct money.
 
         /// <summary>Wage rate ($/hr) applied to every line. Typed on the takeoff screen.</summary>
         public double WageRate { get; set; } = 0.0;
 
         /// <summary>Productivity (SF/hr) applied to every line. Typed on the takeoff screen.</summary>
         public double Productivity { get; set; } = 0.0;
+
+        /// <summary>
+        /// Labor productivity factor sent to Sage's L.Prod Factor column
+        /// (EstimateItemCrewCostCategory.ProductivityFactor).
+        ///
+        /// CAVEAT, verified against a live estimate: on an item with no crew or rate
+        /// table Sage discards the value and normalises the column back to 1 — writing
+        /// 0.85 reads back as 1, with or without a Recalculate. It is written anyway
+        /// (it is harmless, and it starts working the moment those standard-database
+        /// items are given a crew), and the connector logs a NOTE whenever Sage rejects
+        /// it so nobody assumes the number landed.
+        ///
+        /// It is a PASS-THROUGH either way — it does NOT scale the $/SF this tool
+        /// computes. Applying it here as well would double-count it the day Sage starts
+        /// honouring the column itself.
+        /// </summary>
+        public double LaborProductivityFactor { get; set; } = 1.0;
 
         /// <summary>
         /// Divisor in the intumescent thickness factor (WFT / this). Default 5.

@@ -32,20 +32,24 @@ namespace SteelCoatingTakeoff.Core.Sage
                 Description = Describe(line, area)
             };
 
-            // Labor price/SF = wage/productivity (× WFT factor for intumescent). Coats is
-            // not part of this rate — it is already in the area quantity.
+            // Labor price/SF = wage ÷ effective productivity, where thickness divides the
+            // productivity on intumescent lines. Coats is not part of this rate — it is
+            // already in the area quantity.
             var pricePerSf = TakeoffCalculator.LaborPricePerSquareFoot(
                 line, settings.WageRate, settings.Productivity, settings.WftLaborDivisor);
             if (pricePerSf > 0)
             {
-                var lr = TakeoffCalculator.LaborRate(settings.WageRate, settings.Productivity);
+                var effective = TakeoffCalculator.EffectiveProductivity(
+                    line, settings.Productivity, settings.WftLaborDivisor);
                 req.AppliesLabor = true;
                 req.LaborItemMatch = settings.LaborItemMatchFor(line.Coating);
                 req.LaborUnitPrice = TakeoffCalculator.RoundQty(pricePerSf, 4);
+                req.EffectiveProductivity = effective;
+                req.LaborProductivityFactor = settings.LaborProductivityFactor;
                 req.LaborBasis = line.Coating == CoatingType.Intumescent
-                    ? $"WFT {line.WftMils:0.##}/{settings.WftLaborDivisor:0.##}"
-                      + $" × ${lr:0.####}/SF (${settings.WageRate:0.00}/hr ÷ {settings.Productivity:0.##} SF/hr)"
-                    : $"${lr:0.####}/SF (${settings.WageRate:0.00}/hr ÷ {settings.Productivity:0.##} SF/hr)";
+                    ? $"${settings.WageRate:0.00}/hr ÷ {effective:0.##} SF/hr "
+                      + $"({settings.Productivity:0.##} ÷ WFT {line.WftMils:0.##}/{settings.WftLaborDivisor:0.##})"
+                    : $"${settings.WageRate:0.00}/hr ÷ {effective:0.##} SF/hr";
             }
 
             // Primary quantity: coating area (SF) -> the configured area variable.

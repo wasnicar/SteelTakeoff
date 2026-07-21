@@ -32,7 +32,7 @@
 
                 <!-- Footer -->
                 <TextBlock DockPanel.Dock="Bottom" Margin="6,10,0,0" FontSize="11" Foreground="{StaticResource Muted}"
-                           Text="v2.5 · Sage Estimating 25.2"/>
+                           Text="v2.7 · Sage Estimating 25.2"/>
 
                 <!-- Nav -->
                 <StackPanel DockPanel.Dock="Top">
@@ -79,6 +79,13 @@
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE896;" FontSize="14" Margin="0,0,7,0" VerticalAlignment="Center"/>
                                 <TextBlock Text="Export CSV" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Command="{Binding ExportPdfCommand}"
+                                ToolTip="Clean PDF of every member, its quantities, labor and the totals.">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE749;" FontSize="14" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="Export PDF" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
                         <Button Style="{StaticResource Primary}" Command="{Binding SendAllCommand}" Margin="0">
@@ -386,14 +393,21 @@
                                         <StackPanel Grid.Column="0">
                                             <TextBlock Text="Wage rate ($/hr)" Style="{StaticResource FieldLabel}"/>
                                             <TextBox Text="{Binding WageRate, UpdateSourceTrigger=PropertyChanged, StringFormat={}{0:0.##}}"
-                                                     TextAlignment="Right" ToolTip="Hourly wage. Labor rate LR = wage ÷ productivity ($/SF)."/>
+                                                     TextAlignment="Right" ToolTip="Hourly wage. Labor $/SF = wage ÷ effective productivity."/>
                                         </StackPanel>
                                         <StackPanel Grid.Column="2">
                                             <TextBlock Text="Productivity (SF/hr)" Style="{StaticResource FieldLabel}"/>
                                             <TextBox Text="{Binding Productivity, UpdateSourceTrigger=PropertyChanged, StringFormat={}{0:0.##}}"
-                                                     TextAlignment="Right" ToolTip="Square feet applied per hour. Labor rate LR = wage ÷ productivity ($/SF)."/>
+                                                     TextAlignment="Right" ToolTip="Square feet applied per hour. On intumescent lines WFT divides this: 100 SF/hr at 20 mils ÷ 5 becomes 25 SF/hr."/>
                                         </StackPanel>
                                     </Grid>
+
+                                    <StackPanel Margin="0,10,0,0">
+                                        <TextBlock Text="Labor prod factor (L.Prod Factor)" Style="{StaticResource FieldLabel}"/>
+                                        <TextBox Text="{Binding LaborProductivityFactor, UpdateSourceTrigger=PropertyChanged, StringFormat={}{0:0.####}}"
+                                                 TextAlignment="Right"
+                                                 ToolTip="Sent to Sage's L.Prod Factor column on each labor line. It does not change the $/SF calculated here. Sage only keeps this value on items that have a crew — the current coating items do not, so it resets to 1 and the activity log reports it."/>
+                                    </StackPanel>
 
                                     <Grid Margin="0,10,0,0">
                                         <Grid.ColumnDefinitions>
@@ -418,7 +432,7 @@
                                     </Grid>
 
                                     <TextBlock Margin="0,12,0,0" TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource Muted}" LineHeight="18"
-                                               Text="Standard $/SF = LR.  Intumescent $/SF = (WFT ÷ divisor) × LR.  Coats multiply total SF."/>
+                                               Text="$/SF = wage ÷ effective productivity.  On intumescent, WFT divides productivity: at 20 mils ÷ 5, 100 SF/hr becomes 25 SF/hr.  Coats multiply total SF, never the rate."/>
 
                                     <Border Height="1" Background="{StaticResource Line}" Margin="-18,16,-18,0"/>
 

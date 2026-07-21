@@ -81,20 +81,38 @@ namespace SteelCoatingTakeoff.Core
         }
 
         /// <summary>
+        /// Productivity actually achievable on this line (SF/hr).
+        ///
+        ///   standard    → the entered productivity
+        ///   intumescent → productivity ÷ (WFT ÷ divisor)
+        ///
+        /// Thickness slows the crew down, so it DIVIDES productivity: at 20 mils with the
+        /// default divisor of 5 the factor is 4, and 100 SF/hr becomes 25 SF/hr. This is
+        /// the same money as multiplying the price by that factor — wage ÷ (P ÷ f) is
+        /// identically f × (wage ÷ P) — but expressed the way the trade thinks about it,
+        /// and it is the number reported as "effective productivity".
+        /// </summary>
+        public static double EffectiveProductivity(TakeoffLine line, double productivity, double wftLaborDivisor)
+        {
+            if (productivity <= 0 || line == null) return 0.0;
+            if (line.Coating != CoatingType.Intumescent) return productivity;
+
+            var factor = IntumescentFactor(line, wftLaborDivisor);
+            if (factor <= 0) return 0.0;   // intumescent with no WFT is not priceable
+            return productivity / factor;
+        }
+
+        /// <summary>
         /// Labor price per SF written to the item's labor UnitPrice:
-        ///   standard    → LR = wage ÷ productivity
-        ///   intumescent → (WFT ÷ divisor × coats) × LR
+        ///   $/SF = wage ÷ effective productivity
         /// Zero when wage or productivity is unset, or (intumescent) WFT is unset.
         /// </summary>
         public static double LaborPricePerSquareFoot(TakeoffLine line, double wageRate, double productivity, double wftLaborDivisor)
         {
-            var lr = LaborRate(wageRate, productivity);
-            if (lr <= 0 || line == null) return 0.0;
-
-            if (line.Coating == CoatingType.Intumescent)
-                return IntumescentFactor(line, wftLaborDivisor) * lr;
-
-            return lr;
+            if (wageRate <= 0) return 0.0;
+            var effective = EffectiveProductivity(line, productivity, wftLaborDivisor);
+            if (effective <= 0) return 0.0;
+            return wageRate / effective;
         }
 
         /// <summary>Total labor dollars for the line = area × price/SF.</summary>

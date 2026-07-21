@@ -51,6 +51,19 @@ namespace SteelCoatingTakeoff.Core.Sage
         /// <summary>Labor price per SF → item labor UnitPrice (Sage Amount = qty × this).</summary>
         public double LaborUnitPrice { get; set; }
 
+        /// <summary>
+        /// Productivity factor → item labor ProductivityFactor (Sage's L.Prod Factor).
+        /// Informational for the estimator; it does not scale <see cref="LaborUnitPrice"/>.
+        /// </summary>
+        public double LaborProductivityFactor { get; set; } = 1.0;
+
+        /// <summary>
+        /// Achievable productivity (SF/hr) behind the price — the entered productivity for
+        /// standard lines, divided by the WFT factor for intumescent. Reported in the log
+        /// and the PDF; not written to Sage (see <see cref="SageSettings"/> for why).
+        /// </summary>
+        public double EffectiveProductivity { get; set; }
+
         /// <summary>How the price was derived, for the activity log (e.g. "WFT 20/5 × $0.50/SF").</summary>
         public string LaborBasis { get; set; }
 

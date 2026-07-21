@@ -451,6 +451,16 @@ namespace SteelCoatingTakeoff.App.Sage
         /// Write the labor price onto the generated item(s) whose description matches
         /// (blank match = every item), via the labor UnitPrice. Verified against a live
         /// estimate: labor Amount = TakeoffQuantity × UnitPrice.
+        ///
+        /// The productivity factor goes to <c>ProductivityFactor</c> (Sage's L.Prod Factor),
+        /// then is read back: on an item with no crew Sage silently normalises it to 1, so
+        /// the caller is told rather than left believing it landed.
+        ///
+        /// DO NOT also set <c>ProductivityWithFactor</c> (Sage's L.Prod). Round-tripping it
+        /// through a throwaway estimate drove UnitCost and Amount to ZERO — these coating
+        /// items carry no crew or rate table for the productivity to price against, so the
+        /// value reads back correctly but the money is gone. Give the standard-database
+        /// items a crew and both columns become usable.
         /// </summary>
         private static void ApplyLabor(SageTakeoffRequest req, EstimateItemEntityCollection items, SageTakeoffResult result)
         {
@@ -469,14 +479,39 @@ namespace SteelCoatingTakeoff.App.Sage
                 return;
             }
 
+            var crewless = 0;
+
             foreach (var item in targets)
             {
                 var labor = item.LaborCategory;
                 labor.UnitPrice = req.LaborUnitPrice;   // sets UnitCost and Amount = qty × UnitPrice
 
+                // L.Prod Factor. Safe alongside UnitPrice; see the remarks above for why
+                // the productivity itself is deliberately not written.
+                if (req.LaborProductivityFactor > 0)
+                    labor.ProductivityFactor = req.LaborProductivityFactor;
+
+                // Whether the factor SURVIVES cannot be detected by reading it back here:
+                // the setter accepts it, and Sage only normalises it to 1 when the entity
+                // is written. What predicts it is the crew — with no crew resources there
+                // is nothing for a productivity factor to act on.
+                if (labor.ResourceCount <= 0) crewless++;
+
                 result.Log.Add(
                     $"  labor → '{item.Description}': ${req.LaborUnitPrice:0.####}/SF " +
-                    $"[{req.LaborBasis}] = ${labor.Amount:N2}");
+                    $"[{req.LaborBasis}] = ${labor.Amount:N2}" +
+                    $", L.Prod Factor {req.LaborProductivityFactor:0.####}");
+            }
+
+            // Don't let the estimator assume a factor they typed reached the estimate.
+            if (crewless > 0 && Math.Abs(req.LaborProductivityFactor - 1.0) > 0.0001)
+            {
+                result.Log.Add(
+                    $"NOTE: L.Prod Factor {req.LaborProductivityFactor:0.####} will NOT stick on " +
+                    $"'{req.AssemblyId}' — {crewless} of {targets.Count} item(s) have no crew, and Sage " +
+                    "resets the column to 1 on write (verified against a live estimate). Assign a crew " +
+                    "to these standard-database items to make it hold. Labor cost is unaffected: it " +
+                    "comes from the $/SF above.");
             }
         }
 

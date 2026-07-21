@@ -14,7 +14,7 @@ param(
   [string]$RepoRoot   = (Split-Path $PSScriptRoot -Parent),
   [string]$SdkDir     = "C:\00 - Program Installs\SDK\SDK - 25.2\Sage.Estimating.Sdk.25.2.2510.091\Binaries",
   [string]$MsBuild    = "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe",
-  [string]$AppVersion = "2.5.0"
+  [string]$AppVersion = "2.7.0"
 )
 $ErrorActionPreference = "Stop"
 

@@ -102,53 +102,58 @@ namespace SteelCoatingTakeoff.Core
 
             // ---- labor -------------------------------------------------------
             var divisor = settings.WftLaborDivisor > 0 ? settings.WftLaborDivisor : 5.0;
-            var lr = TakeoffCalculator.LaborRate(settings.WageRate, settings.Productivity);
-            if (lr <= 0)
+            if (settings.WageRate <= 0 || settings.Productivity <= 0)
             {
                 steps.Add(new CalculationStep(
                     "Labor",
                     "⚠  Set Wage Rate and Productivity on the takeoff screen to price labor."));
             }
+            else if (line.Coating == CoatingType.Intumescent && line.WftMils <= 0)
+            {
+                steps.Add(new CalculationStep("Labor", "⚠  WFT is not set — intumescent labor needs a thickness."));
+            }
             else
             {
+                var effective = TakeoffCalculator.EffectiveProductivity(line, settings.Productivity, divisor);
                 var pricePerSf = TakeoffCalculator.LaborPricePerSquareFoot(
                     line, settings.WageRate, settings.Productivity, divisor);
                 var amount = TakeoffCalculator.LaborAmount(
                     line, settings.WageRate, settings.Productivity, divisor);
 
-                steps.Add(new CalculationStep(
-                    "Labor rate (LR)",
-                    $"${settings.WageRate:0.00}/hr ÷ {Num(settings.Productivity)} SF/hr  =  ${lr:0.####} /SF"));
-
                 if (line.Coating == CoatingType.Intumescent)
                 {
-                    if (line.WftMils <= 0)
-                    {
-                        steps.Add(new CalculationStep("Labor", "⚠  WFT is not set — intumescent labor needs a thickness."));
-                    }
-                    else
-                    {
-                        var factor = TakeoffCalculator.IntumescentFactor(line, divisor);
-                        steps.Add(new CalculationStep(
-                            "Intumescent factor",
-                            $"{Num(line.WftMils)} mils ÷ {Num(divisor)}  =  {Num(factor)}"));
-                        steps.Add(new CalculationStep(
-                            "Labor $/SF",
-                            $"{Num(factor)}  ×  ${lr:0.####}  =  ${pricePerSf:0.####} /SF  → item labor UnitPrice"));
-                        steps.Add(new CalculationStep(
-                            "Labor total",
-                            $"{rounded:0.00} SF  ×  ${pricePerSf:0.####}  =  ${amount:N2}"));
-                    }
+                    var factor = TakeoffCalculator.IntumescentFactor(line, divisor);
+                    steps.Add(new CalculationStep(
+                        "Thickness factor",
+                        $"WFT {Num(line.WftMils)} mils ÷ {Num(divisor)}  =  {Num(factor)}"));
+                    steps.Add(new CalculationStep(
+                        "Effective productivity",
+                        $"{Num(settings.Productivity)} SF/hr ÷ {Num(factor)}  =  {Num(effective)} SF/hr"));
+                    steps.Add(new CalculationStep(
+                        "why",
+                        "Thickness slows the crew rather than adding area — a heavier film means fewer " +
+                        "square feet per hour, so WFT divides productivity."));
                 }
                 else
                 {
                     steps.Add(new CalculationStep(
-                        "Labor $/SF",
-                        $"${pricePerSf:0.####} /SF (= LR)  → item labor UnitPrice"));
-                    steps.Add(new CalculationStep(
-                        "Labor total",
-                        $"{rounded:0.00} SF  ×  ${pricePerSf:0.####}  =  ${amount:N2}"));
+                        "Effective productivity",
+                        $"{Num(effective)} SF/hr  —  as entered (no thickness penalty on standard coating)"));
                 }
+
+                steps.Add(new CalculationStep(
+                    "Labor $/SF",
+                    $"${settings.WageRate:0.00}/hr ÷ {Num(effective)} SF/hr  =  ${pricePerSf:0.####} /SF" +
+                    "  → item labor UnitPrice"));
+                steps.Add(new CalculationStep(
+                    "Labor total",
+                    $"{rounded:0.00} SF  ×  ${pricePerSf:0.####}  =  ${amount:N2}"));
+
+                steps.Add(new CalculationStep(
+                    "L.Prod Factor",
+                    $"{Num(settings.LaborProductivityFactor)}  → sent to Sage's L.Prod Factor column. " +
+                    "It does not change the $/SF above. Sage only keeps this on an item that has a " +
+                    "crew; on these coating items it resets to 1 and the activity log says so."));
             }
 
             // ---- routing -----------------------------------------------------

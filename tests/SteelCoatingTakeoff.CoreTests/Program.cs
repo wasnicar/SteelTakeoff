@@ -6,6 +6,7 @@ using System.Runtime.Serialization.Json;
 using System.Text;
 using SteelCoatingTakeoff.Core;
 using SteelCoatingTakeoff.Core.Model;
+using SteelCoatingTakeoff.Core.Reporting;
 using SteelCoatingTakeoff.Core.Sage;
 
 namespace SteelCoatingTakeoff.CoreTests
@@ -199,15 +200,22 @@ namespace SteelCoatingTakeoff.CoreTests
             explainSettings.Productivity = 100;
             var wftExplained = string.Join(" | ",
                 TakeoffExplainer.Explain(wftLine, explainSettings).Select(s => s.Label + ": " + s.Detail));
-            Check("breakdown shows LR", wftExplained.Contains("$50.00/hr ÷ 100 SF/hr"));
+            // WFT 20 / divisor 5 = factor 4, so 100 SF/hr becomes 25 SF/hr and the wage
+            // is divided by THAT, not by the entered productivity.
+            Check("breakdown shows the effective productivity",
+                wftExplained.Contains("100 SF/hr ÷ 4  =  25 SF/hr"));
+            Check("breakdown divides the wage by the effective productivity",
+                wftExplained.Contains("$50.00/hr ÷ 25 SF/hr"));
             Check("breakdown shows the intumescent factor", wftExplained.Contains("20 mils ÷ 5"));
             Check("breakdown shows labor $/SF", wftExplained.Contains("Labor $/SF"));
             Check("breakdown shows labor total", wftExplained.Contains("Labor total"));
 
             var stdExplained = string.Join(" | ",
                 TakeoffExplainer.Explain(stdLine, explainSettings).Select(s => s.Label + ": " + s.Detail));
-            Check("standard breakdown shows LR", stdExplained.Contains("Labor rate (LR)"));
-            Check("standard breakdown has no intumescent factor", !stdExplained.Contains("Intumescent factor"));
+            Check("standard breakdown shows productivity as entered",
+                stdExplained.Contains("100 SF/hr  —  as entered"));
+            Check("standard breakdown has no thickness factor", !stdExplained.Contains("Thickness factor"));
+            Check("breakdown reports the L.Prod Factor pass-through", stdExplained.Contains("L.Prod Factor"));
 
             explainSettings.WageRate = 0;
             Check("breakdown prompts for wage/productivity when unset",
@@ -235,6 +243,82 @@ namespace SteelCoatingTakeoff.CoreTests
             Near("settings round-trip: divisor", roundTripped.WftLaborDivisor, 6.0);
             Check("settings round-trip: default coats", roundTripped.DefaultCoats == 2);
             Check("settings round-trip: standard match", roundTripped.StandardLaborItemMatch == "Coat");
+
+            Console.WriteLine("\nEffective productivity (WFT divides productivity):");
+            var prodSettings = new SageSettings { WageRate = 50, Productivity = 100, WftLaborDivisor = 5 };
+            var std100 = new TakeoffLine { Family = db.GetFamily("W"), Shape = w12, LinearFeet = 10, Coating = CoatingType.Standard };
+            var int20 = new TakeoffLine { Family = db.GetFamily("W"), Shape = w12, LinearFeet = 10, Coating = CoatingType.Intumescent, WftMils = 20 };
+
+            Near("standard: effective productivity is as entered",
+                TakeoffCalculator.EffectiveProductivity(std100, 100, 5), 100.0);
+            Near("intumescent 20 mils: 100 SF/hr -> 25 SF/hr",
+                TakeoffCalculator.EffectiveProductivity(int20, 100, 5), 25.0);
+            Near("standard $/SF = wage / productivity",
+                TakeoffCalculator.LaborPricePerSquareFoot(std100, 50, 100, 5), 0.50);
+            Near("intumescent $/SF = wage / effective productivity",
+                TakeoffCalculator.LaborPricePerSquareFoot(int20, 50, 100, 5), 2.00);
+
+            // Dividing productivity must cost exactly what multiplying the price did, or
+            // the change would silently reprice every historical bid.
+            Near("dividing productivity == multiplying the old rate",
+                TakeoffCalculator.LaborPricePerSquareFoot(int20, 50, 100, 5),
+                TakeoffCalculator.IntumescentFactor(int20, 5) * TakeoffCalculator.LaborRate(50, 100));
+
+            // Coats scales area only; the rate must not move.
+            var int20x3 = new TakeoffLine { Family = db.GetFamily("W"), Shape = w12, LinearFeet = 10, Coating = CoatingType.Intumescent, WftMils = 20, Coats = 3 };
+            Near("coats does not change the labor rate",
+                TakeoffCalculator.LaborPricePerSquareFoot(int20x3, 50, 100, 5), 2.00);
+            Near("coats does scale the labor total",
+                TakeoffCalculator.LaborAmount(int20x3, 50, 100, 5),
+                3.0 * TakeoffCalculator.LaborAmount(int20, 50, 100, 5));
+
+            Check("intumescent with no WFT is not priceable",
+                TakeoffCalculator.LaborPricePerSquareFoot(
+                    new TakeoffLine { Family = db.GetFamily("W"), Shape = w12, LinearFeet = 10, Coating = CoatingType.Intumescent, WftMils = 0 },
+                    50, 100, 5) == 0.0);
+
+            var prodReq = TakeoffRequestBuilder.Build(int20, prodSettings);
+            Near("request carries the effective productivity", prodReq.EffectiveProductivity, 25.0);
+            Near("request carries the L.Prod Factor", prodReq.LaborProductivityFactor, 1.0);
+            prodSettings.LaborProductivityFactor = 0.85;
+            Near("L.Prod Factor flows from settings",
+                TakeoffRequestBuilder.Build(int20, prodSettings).LaborProductivityFactor, 0.85);
+            Near("L.Prod Factor does NOT change the price (pass-through)",
+                TakeoffRequestBuilder.Build(int20, prodSettings).LaborUnitPrice, 2.00);
+
+            Console.WriteLine("\nPDF report:");
+            var pdfPath = Path.Combine(Path.GetTempPath(), "steelcoating-test-" + Guid.NewGuid().ToString("N") + ".pdf");
+            try
+            {
+                var many = Enumerable.Range(0, 90)
+                    .Select(i => new TakeoffLine
+                    {
+                        Family = db.GetFamily("W"), Shape = w12, LinearFeet = 10 + i,
+                        Coating = i % 2 == 0 ? CoatingType.Intumescent : CoatingType.Standard,
+                        WftMils = 20, Coats = 1
+                    }).ToList();
+
+                TakeoffReport.Write(pdfPath, many, prodSettings, "Estimate 1", new DateTime(2026, 7, 21, 9, 30, 0));
+                var bytes = File.ReadAllBytes(pdfPath);
+                var text = Encoding.GetEncoding(28591).GetString(bytes);
+
+                Check("pdf file written", bytes.Length > 1000, $"{bytes.Length} bytes");
+                Check("pdf has a header", text.StartsWith("%PDF-1.4"));
+                Check("pdf is terminated", text.TrimEnd().EndsWith("%%EOF"));
+                Check("pdf paginates 90 rows", TakeoffReport.Build(many, prodSettings, "E", DateTime.Now).PageCount > 1);
+
+                // startxref must point at the real xref table or readers reject the file.
+                var marker = text.LastIndexOf("startxref", StringComparison.Ordinal);
+                var declared = int.Parse(text.Substring(marker + 9).Trim().Split('\n')[0].Trim());
+                Check("pdf startxref offset is correct",
+                    declared > 0 && declared < bytes.Length &&
+                    text.Substring(declared).StartsWith("xref"),
+                    $"declared {declared} of {bytes.Length}");
+
+                Check("pdf reports the estimate name", text.Contains("Estimate 1"));
+                Check("pdf reports the totals", text.Contains("TOTAL"));
+            }
+            finally { if (File.Exists(pdfPath)) File.Delete(pdfPath); }
 
             Console.WriteLine("\nMock connector end-to-end:");
             var log = new List<string>();

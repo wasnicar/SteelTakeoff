@@ -29,6 +29,10 @@ namespace SteelCoatingTakeoff.App.ViewModels
         private bool _isIntumescent;
         private double _wftMils;
         private int _coats = 1;
+        private bool _isSelected;
+        private double _wageRate;
+        private double _productivity;
+        private double _laborProductivityFactor = 1.0;
 
         public TakeoffRowViewModel(
             IReadOnlyList<ShapeFamily> families,
@@ -39,8 +43,54 @@ namespace SteelCoatingTakeoff.App.ViewModels
             _settings = settings;
             _wftMils = settings?.DefaultWftMils ?? 0;
             _coats = settings?.DefaultCoats > 0 ? settings.DefaultCoats : 1;
+
+            // Labor is per member; the settings supply the starting values for a new one.
+            _wageRate = settings?.WageRate ?? 0.0;
+            _productivity = settings?.Productivity ?? 0.0;
+            _laborProductivityFactor = settings?.LaborProductivityFactor > 0
+                ? settings.LaborProductivityFactor : 1.0;
+
             SelectedFamily = initialFamily ?? families.FirstOrDefault();
         }
+
+        /// <summary>
+        /// Whether this member is part of the current selection. Two-way bound to
+        /// DataGridRow.IsSelected, so the checkbox column, ctrl/shift-clicking and the
+        /// mass-edit panel all read and write the same flag.
+        /// </summary>
+        public bool IsSelected
+        {
+            get => _isSelected;
+            set { if (Set(ref _isSelected, value)) Changed?.Invoke(this, EventArgs.Empty); }
+        }
+
+        // ---- per-member labor ---------------------------------------------
+
+        public double WageRate
+        {
+            get => _wageRate;
+            set { if (Set(ref _wageRate, value)) NotifyComputed(); }
+        }
+
+        public double Productivity
+        {
+            get => _productivity;
+            set { if (Set(ref _productivity, value)) NotifyComputed(); }
+        }
+
+        public double LaborProductivityFactor
+        {
+            get => _laborProductivityFactor;
+            set { if (Set(ref _laborProductivityFactor, value)) NotifyComputed(); }
+        }
+
+        /// <summary>Effective SF/hr for this member — productivity after any WFT penalty.</summary>
+        public double EffectiveProductivity =>
+            TakeoffCalculator.EffectiveProductivity(ToLine(), _settings?.WftLaborDivisor ?? 5.0);
+
+        /// <summary>Labor price per square foot for this member.</summary>
+        public double LaborPricePerSquareFoot =>
+            TakeoffCalculator.LaborPricePerSquareFoot(ToLine(), _settings?.WftLaborDivisor ?? 5.0);
 
         public ShapeFamily SelectedFamily
         {
@@ -106,9 +156,9 @@ namespace SteelCoatingTakeoff.App.ViewModels
         /// <summary>Wrapped coating area — the quantity sent to Sage (same for both coating types).</summary>
         public double AreaSquareFeet => TakeoffCalculator.AreaSquareFeet(ToLine());
 
-        /// <summary>Labor dollars for this line, using the global wage + productivity.</summary>
-        public double LaborAmount => TakeoffCalculator.LaborAmount(
-            ToLine(), _settings?.WageRate ?? 0.0, _settings?.Productivity ?? 0.0, _settings?.WftLaborDivisor ?? 5.0);
+        /// <summary>Labor dollars for this line, using this member's own wage + productivity.</summary>
+        public double LaborAmount =>
+            TakeoffCalculator.LaborAmount(ToLine(), _settings?.WftLaborDivisor ?? 5.0);
 
         /// <summary>Step-by-step derivation shown under the row by "Show calculation".</summary>
         public IReadOnlyList<CalculationStep> CalculationSteps => TakeoffExplainer.Explain(ToLine(), _settings);
@@ -123,7 +173,10 @@ namespace SteelCoatingTakeoff.App.ViewModels
             LinearFeet = LinearFeet,
             Coating = Coating,
             WftMils = WftMils,
-            Coats = Coats
+            Coats = Coats,
+            WageRate = WageRate,
+            Productivity = Productivity,
+            LaborProductivityFactor = LaborProductivityFactor
         };
 
         private void RebuildSizes()
@@ -139,8 +192,26 @@ namespace SteelCoatingTakeoff.App.ViewModels
             Raise(nameof(SfPerFoot));
             Raise(nameof(AreaSquareFeet));
             Raise(nameof(LaborAmount));
+            Raise(nameof(EffectiveProductivity));
+            Raise(nameof(LaborPricePerSquareFoot));
             Raise(nameof(CalculationSteps));
             Changed?.Invoke(this, EventArgs.Empty);
+        }
+
+        /// <summary>
+        /// Push new labor values in from a mass edit without going through the public
+        /// setters one at a time, so the grid and totals refresh once.
+        /// </summary>
+        public void ApplyLabor(double? wage, double? productivity, double? factor)
+        {
+            if (wage.HasValue) _wageRate = wage.Value;
+            if (productivity.HasValue) _productivity = productivity.Value;
+            if (factor.HasValue) _laborProductivityFactor = factor.Value;
+
+            Raise(nameof(WageRate));
+            Raise(nameof(Productivity));
+            Raise(nameof(LaborProductivityFactor));
+            NotifyComputed();
         }
 
         /// <summary>

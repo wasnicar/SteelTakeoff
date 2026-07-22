@@ -278,10 +278,28 @@
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="{StaticResource Surface2}"/>
                 </Trigger>
+                <!-- Selected rows read blue. Blue100 rather than a saturated fill: the row
+                     is full of white input boxes, and a strong blue would fight them. -->
                 <Trigger Property="IsSelected" Value="True">
-                    <Setter Property="Background" Value="{StaticResource Blue50}"/>
+                    <Setter Property="Background" Value="{StaticResource Blue100}"/>
                 </Trigger>
             </Style.Triggers>
+        </Style>
+
+        <!-- Compact label + field for the defaults strip above the takeoff grid. -->
+        <Style x:Key="InlineFieldLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="{StaticResource Ink2}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,6,0"/>
+        </Style>
+
+        <Style x:Key="InlineField" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+            <Setter Property="Width" Value="62"/>
+            <Setter Property="TextAlignment" Value="Right"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,14,0"/>
+            <Setter Property="Padding" Value="6,3"/>
         </Style>
 
         <!-- Setters only, no custom Template: replacing the DataGridCell template

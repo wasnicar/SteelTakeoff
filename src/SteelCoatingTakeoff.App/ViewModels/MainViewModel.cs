@@ -119,36 +119,11 @@ namespace SteelCoatingTakeoff.App.ViewModels
         /// <summary>Reveals the derivation panel under the selected row.</summary>
         public bool ShowCalculation { get => _showCalculation; set => Set(ref _showCalculation, value); }
 
-        // ---- global labor inputs (right panel) ----
-        // Proxied through the ViewModel so a change re-prices every line live.
-        public double WageRate
-        {
-            get => Settings.WageRate;
-            set { if (Settings.WageRate != value) { Settings.WageRate = value; Raise(nameof(WageRate)); RepriceLabor(); } }
-        }
-
-        public double Productivity
-        {
-            get => Settings.Productivity;
-            set { if (Settings.Productivity != value) { Settings.Productivity = value; Raise(nameof(Productivity)); RepriceLabor(); } }
-        }
-
-        /// <summary>
-        /// Written to Sage's L.Prod Factor column. A pass-through for the estimator: it
-        /// does not change the $/SF this tool computes, so RepriceLabor only refreshes
-        /// the shown derivation.
-        /// </summary>
-        public double LaborProductivityFactor
-        {
-            get => Settings.LaborProductivityFactor;
-            set
-            {
-                if (Settings.LaborProductivityFactor == value) return;
-                Settings.LaborProductivityFactor = value;
-                Raise(nameof(LaborProductivityFactor));
-                RepriceLabor();
-            }
-        }
+        // Labor is no longer global — each member carries its own wage, productivity and
+        // L.Prod Factor, edited through the selection panel further down. What remains in
+        // Settings (WageRate, Productivity, LaborProductivityFactor, DefaultWftMils,
+        // DefaultCoats) are the values a NEW member starts with; the toolbar binds to
+        // Settings directly, since changing a default must not reprice existing members.
 
         private void RepriceLabor()
         {
@@ -183,12 +158,14 @@ namespace SteelCoatingTakeoff.App.ViewModels
             Settings = SettingsStore.Load();
 
             AddRowCommand = new RelayCommand(() => AddRow());
-            RemoveRowCommand = new RelayCommand(RemoveRow, () => SelectedRow != null);
-            DuplicateRowCommand = new RelayCommand(DuplicateRow, () => SelectedRow != null);
+            RemoveRowCommand = new RelayCommand(RemoveRow, () => SelectedRow != null || HasSelection);
+            DuplicateRowCommand = new RelayCommand(DuplicateRow, () => SelectedRow != null || HasSelection);
             ClearCommand = new RelayCommand(ClearRows, () => Rows.Count > 0);
             SendAllCommand = new RelayCommand(async _ => await SendAsync(Rows.ToList()), _ => IsNotBusy && Rows.Count > 0);
-            SendSelectedCommand = new RelayCommand(async _ => await SendAsync(SelectedRow == null ? new List<TakeoffRowViewModel>() : new List<TakeoffRowViewModel> { SelectedRow }),
-                                                   _ => IsNotBusy && SelectedRow != null);
+            // "Send selected" follows the checkbox/ctrl-click selection, so it can send
+            // several members at once.
+            SendSelectedCommand = new RelayCommand(async _ => await SendAsync(TargetRows()),
+                                                   _ => IsNotBusy && (HasSelection || SelectedRow != null));
             TestConnectionCommand = new RelayCommand(async _ => await TestConnectionAsync(), _ => IsNotBusy);
             ExportCsvCommand = new RelayCommand(ExportCsv, () => Rows.Count > 0);
             ExportPdfCommand = new RelayCommand(ExportPdf, () => Rows.Count > 0);
@@ -341,25 +318,37 @@ namespace SteelCoatingTakeoff.App.ViewModels
             return row;
         }
 
+        /// <summary>
+        /// The members an action applies to: the checkbox/ctrl-click selection when
+        /// there is one, otherwise just the focused row.
+        /// </summary>
+        private List<TakeoffRowViewModel> TargetRows()
+        {
+            var selected = SelectedRows.ToList();
+            if (selected.Count > 0) return selected;
+            return SelectedRow == null ? new List<TakeoffRowViewModel>() : new List<TakeoffRowViewModel> { SelectedRow };
+        }
+
         private void RemoveRow()
         {
-            if (SelectedRow == null) return;
-            Rows.Remove(SelectedRow);
+            foreach (var row in TargetRows()) Rows.Remove(row);
             SelectedRow = Rows.LastOrDefault();
             RecomputeTotals();
         }
 
         private void DuplicateRow()
         {
-            var src = SelectedRow;
-            if (src == null) return;
-            var row = AddRow(src.SelectedFamily);
-            row.SelectedShape = src.SelectedShape;
-            row.PlateWidthInches = src.PlateWidthInches;
-            row.LinearFeet = src.LinearFeet;
-            row.IsIntumescent = src.IsIntumescent;
-            row.WftMils = src.WftMils;
-            row.Coats = src.Coats;
+            foreach (var src in TargetRows())
+            {
+                var row = AddRow(src.SelectedFamily);
+                row.SelectedShape = src.SelectedShape;
+                row.PlateWidthInches = src.PlateWidthInches;
+                row.LinearFeet = src.LinearFeet;
+                row.IsIntumescent = src.IsIntumescent;
+                row.WftMils = src.WftMils;
+                row.Coats = src.Coats;
+                row.ApplyLabor(src.WageRate, src.Productivity, src.LaborProductivityFactor);
+            }
         }
 
         private void ClearRows()
@@ -376,6 +365,153 @@ namespace SteelCoatingTakeoff.App.ViewModels
             Raise(nameof(TotalLinearFeet));
             Raise(nameof(TotalLabor));
             Raise(nameof(LineCount));
+            RaiseSelectionState();
+        }
+
+        // ==================== selection & mass edit ====================
+        //
+        // Labor lives on each member, so the right-hand panel edits whatever is
+        // selected. A selection spanning both coating types gets TWO sets of fields:
+        // intumescent needs a WFT that would be meaningless on a standard line, and
+        // the two are routinely priced by different crews — so blending them into one
+        // set would silently overwrite one type with the other's rate.
+        //
+        // A field shows the common value across its subset, or blank when they differ;
+        // typing into it writes that value to every member in the subset.
+
+        public IEnumerable<TakeoffRowViewModel> SelectedRows => Rows.Where(r => r.IsSelected);
+        private List<TakeoffRowViewModel> SelStandard => SelectedRows.Where(r => !r.IsIntumescent).ToList();
+        private List<TakeoffRowViewModel> SelIntumescent => SelectedRows.Where(r => r.IsIntumescent).ToList();
+
+        public bool HasSelection => SelectedRows.Any();
+        public bool HasStandardSelection => SelStandard.Count > 0;
+        public bool HasIntumescentSelection => SelIntumescent.Count > 0;
+
+        public string SelectionSummary
+        {
+            get
+            {
+                var n = SelectedRows.Count();
+                if (n == 0) return "No members selected";
+                return n == 1 ? "1 member selected" : $"{n} members selected";
+            }
+        }
+
+        public string StandardSetTitle => $"Standard steel  ({SelStandard.Count})";
+        public string IntumescentSetTitle => $"Intumescent  ({SelIntumescent.Count})";
+
+        /// <summary>The shared value across a subset, or null when they differ (field shows blank).</summary>
+        private static double? Common(IEnumerable<double> values)
+        {
+            double? first = null;
+            foreach (var v in values)
+            {
+                if (first == null) first = v;
+                else if (Math.Abs(first.Value - v) > 0.0000001) return null;
+            }
+            return first;
+        }
+
+        private static int? CommonInt(IEnumerable<int> values)
+        {
+            int? first = null;
+            foreach (var v in values)
+            {
+                if (first == null) first = v;
+                else if (first.Value != v) return null;
+            }
+            return first;
+        }
+
+        // ---- standard set ----
+        public double? StdWageRate
+        {
+            get => Common(SelStandard.Select(r => r.WageRate));
+            set => ApplyLabor(SelStandard, wage: value);
+        }
+        public double? StdProductivity
+        {
+            get => Common(SelStandard.Select(r => r.Productivity));
+            set => ApplyLabor(SelStandard, productivity: value);
+        }
+        public double? StdProdFactor
+        {
+            get => Common(SelStandard.Select(r => r.LaborProductivityFactor));
+            set => ApplyLabor(SelStandard, factor: value);
+        }
+        public int? StdCoats
+        {
+            get => CommonInt(SelStandard.Select(r => r.Coats));
+            set => ApplyCoats(SelStandard, value);
+        }
+
+        // ---- intumescent set (same fields plus WFT) ----
+        public double? IntWageRate
+        {
+            get => Common(SelIntumescent.Select(r => r.WageRate));
+            set => ApplyLabor(SelIntumescent, wage: value);
+        }
+        public double? IntProductivity
+        {
+            get => Common(SelIntumescent.Select(r => r.Productivity));
+            set => ApplyLabor(SelIntumescent, productivity: value);
+        }
+        public double? IntProdFactor
+        {
+            get => Common(SelIntumescent.Select(r => r.LaborProductivityFactor));
+            set => ApplyLabor(SelIntumescent, factor: value);
+        }
+        public int? IntCoats
+        {
+            get => CommonInt(SelIntumescent.Select(r => r.Coats));
+            set => ApplyCoats(SelIntumescent, value);
+        }
+        public double? IntWftMils
+        {
+            get => Common(SelIntumescent.Select(r => r.WftMils));
+            set
+            {
+                if (!value.HasValue) return;
+                foreach (var r in SelIntumescent) r.WftMils = value.Value;
+                RaiseSelectionState();
+            }
+        }
+
+        private void ApplyLabor(
+            List<TakeoffRowViewModel> rows,
+            double? wage = null, double? productivity = null, double? factor = null)
+        {
+            // A cleared box means "leave these alone", not "set them to zero".
+            if (wage == null && productivity == null && factor == null) return;
+            foreach (var r in rows) r.ApplyLabor(wage, productivity, factor);
+            RaiseSelectionState();
+        }
+
+        private void ApplyCoats(List<TakeoffRowViewModel> rows, int? coats)
+        {
+            if (!coats.HasValue || coats.Value < 1) return;
+            foreach (var r in rows) r.Coats = coats.Value;
+            RaiseSelectionState();
+        }
+
+        /// <summary>Re-read every mass-edit field after the selection or a member changes.</summary>
+        public void RaiseSelectionState()
+        {
+            Raise(nameof(HasSelection));
+            Raise(nameof(HasStandardSelection));
+            Raise(nameof(HasIntumescentSelection));
+            Raise(nameof(SelectionSummary));
+            Raise(nameof(StandardSetTitle));
+            Raise(nameof(IntumescentSetTitle));
+            Raise(nameof(StdWageRate));
+            Raise(nameof(StdProductivity));
+            Raise(nameof(StdProdFactor));
+            Raise(nameof(StdCoats));
+            Raise(nameof(IntWageRate));
+            Raise(nameof(IntProductivity));
+            Raise(nameof(IntProdFactor));
+            Raise(nameof(IntCoats));
+            Raise(nameof(IntWftMils));
         }
 
         // ---------- Sage ----------

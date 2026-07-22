@@ -9,7 +9,7 @@
 #define AppPublisher   "Asnicar & Associates"
 #define AppExeName     "SteelCoatingTakeoff.exe"
 #ifndef AppVersion
-  #define AppVersion   "2.7.0"
+  #define AppVersion   "2.8.0"
 #endif
 #ifndef StageDir
   #define StageDir     "..\dist\stage\SteelCoatingTakeoff"

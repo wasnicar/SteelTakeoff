@@ -24,14 +24,16 @@ namespace SteelCoatingTakeoff.Core.Reporting
         // Right edge of each numeric column; text columns note their left edge.
         private const double XNum = 52.0;
         private const double XMember = 60.0;
-        private const double XCoating = 196.0;
-        private const double XCoats = 300.0;
-        private const double XWft = 350.0;
-        private const double XLf = 410.0;
-        private const double XSfLf = 470.0;
-        private const double XArea = 538.0;
-        private const double XProd = 606.0;
-        private const double XRate = 664.0;
+        private const double XMemberWidth = 120.0;
+        private const double XCoating = 186.0;
+        private const double XCoats = 286.0;
+        private const double XWft = 330.0;
+        private const double XLf = 388.0;
+        private const double XSfLf = 444.0;
+        private const double XArea = 510.0;
+        private const double XWage = 566.0;
+        private const double XProd = 622.0;
+        private const double XRate = 678.0;
         private const double XLabor = Right;
 
         public static void Write(
@@ -76,9 +78,9 @@ namespace SteelCoatingTakeoff.Core.Reporting
                 }
 
                 var area = TakeoffCalculator.AreaSquareFeet(line);
-                var labor = TakeoffCalculator.LaborAmount(line, settings.WageRate, settings.Productivity, divisor);
-                var rate = TakeoffCalculator.LaborPricePerSquareFoot(line, settings.WageRate, settings.Productivity, divisor);
-                var prod = TakeoffCalculator.EffectiveProductivity(line, settings.Productivity, divisor);
+                var labor = TakeoffCalculator.LaborAmount(line, divisor);
+                var rate = TakeoffCalculator.LaborPricePerSquareFoot(line, divisor);
+                var prod = TakeoffCalculator.EffectiveProductivity(line, divisor);
                 var intumescent = line.Coating == CoatingType.Intumescent;
 
                 totalLf += line.LinearFeet;
@@ -88,7 +90,7 @@ namespace SteelCoatingTakeoff.Core.Reporting
 
                 var index = rows.IndexOf(line) + 1;
                 pdf.TextRight(XNum, y, index.ToString(), BodySize, PdfFont.Mono, 0.45);
-                pdf.Text(XMember, y, Fit(MemberLabel(line), 132.0), BodySize);
+                pdf.Text(XMember, y, Fit(MemberLabel(line), XMemberWidth), BodySize);
                 pdf.Text(XCoating, y, intumescent ? "Intumescent" : "Standard", BodySize, PdfFont.Regular,
                          intumescent ? 0.35 : 0.0);
                 pdf.TextRight(XCoats, y, line.Coats > 0 ? line.Coats.ToString() : "1", BodySize);
@@ -96,6 +98,7 @@ namespace SteelCoatingTakeoff.Core.Reporting
                 pdf.TextRight(XLf, y, line.LinearFeet.ToString("N2"), BodySize);
                 pdf.TextRight(XSfLf, y, TakeoffCalculator.SfPerFoot(line).ToString("0.####"), BodySize);
                 pdf.TextRight(XArea, y, area.ToString("N2"), BodySize);
+                pdf.TextRight(XWage, y, line.WageRate > 0 ? line.WageRate.ToString("N2") : "-", BodySize);
                 pdf.TextRight(XProd, y, prod > 0 ? prod.ToString("N2") : "-", BodySize);
                 pdf.TextRight(XRate, y, rate > 0 ? rate.ToString("N4") : "-", BodySize);
                 pdf.TextRight(XLabor, y, labor > 0 ? labor.ToString("N2") : "-", BodySize);
@@ -127,10 +130,11 @@ namespace SteelCoatingTakeoff.Core.Reporting
             pdf.Text(Margin, y, "Estimate: " + estimate, 9.5, PdfFont.Regular, 0.25);
             y -= 13.0;
 
-            // The labor inputs behind every $/SF on the page.
+            // Wage and productivity are per member, so they are columns rather than a
+            // single figure here; this line states the rule that turns them into $/SF.
             var basis =
-                $"Wage ${settings.WageRate:N2}/hr    Productivity {settings.Productivity:N2} SF/hr    " +
-                $"L.Prod Factor {settings.LaborProductivityFactor:0.##}    Intumescent: productivity / (WFT / {settings.WftLaborDivisor:0.##})";
+                "Labor is priced per member:  $/SF = wage / effective SF/hr.    " +
+                $"Intumescent: productivity / (WFT / {settings.WftLaborDivisor:0.##})";
             pdf.Text(Margin, y, basis, 8.5, PdfFont.Regular, 0.40);
             y -= 16.0;
 
@@ -143,6 +147,7 @@ namespace SteelCoatingTakeoff.Core.Reporting
             pdf.TextRight(XLf, y, "LF", 8.5, PdfFont.MonoBold);
             pdf.TextRight(XSfLf, y, "SF/LF", 8.5, PdfFont.MonoBold);
             pdf.TextRight(XArea, y, "Area SF", 8.5, PdfFont.MonoBold);
+            pdf.TextRight(XWage, y, "Wage/hr", 8.5, PdfFont.MonoBold);
             pdf.TextRight(XProd, y, "SF/hr", 8.5, PdfFont.MonoBold);
             pdf.TextRight(XRate, y, "$/SF", 8.5, PdfFont.MonoBold);
             pdf.TextRight(XLabor, y, "Labor $", 8.5, PdfFont.MonoBold);

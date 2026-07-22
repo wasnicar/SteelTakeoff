@@ -33,23 +33,22 @@ namespace SteelCoatingTakeoff.Core.Sage
             };
 
             // Labor price/SF = wage ÷ effective productivity, where thickness divides the
-            // productivity on intumescent lines. Coats is not part of this rate — it is
-            // already in the area quantity.
-            var pricePerSf = TakeoffCalculator.LaborPricePerSquareFoot(
-                line, settings.WageRate, settings.Productivity, settings.WftLaborDivisor);
+            // productivity on intumescent lines. Wage and productivity come from the LINE,
+            // so members can be priced individually. Coats is not part of this rate — it
+            // is already in the area quantity.
+            var pricePerSf = TakeoffCalculator.LaborPricePerSquareFoot(line, settings.WftLaborDivisor);
             if (pricePerSf > 0)
             {
-                var effective = TakeoffCalculator.EffectiveProductivity(
-                    line, settings.Productivity, settings.WftLaborDivisor);
+                var effective = TakeoffCalculator.EffectiveProductivity(line, settings.WftLaborDivisor);
                 req.AppliesLabor = true;
                 req.LaborItemMatch = settings.LaborItemMatchFor(line.Coating);
                 req.LaborUnitPrice = TakeoffCalculator.RoundQty(pricePerSf, 4);
                 req.EffectiveProductivity = effective;
-                req.LaborProductivityFactor = settings.LaborProductivityFactor;
+                req.LaborProductivityFactor = line.LaborProductivityFactor;
                 req.LaborBasis = line.Coating == CoatingType.Intumescent
-                    ? $"${settings.WageRate:0.00}/hr ÷ {effective:0.##} SF/hr "
-                      + $"({settings.Productivity:0.##} ÷ WFT {line.WftMils:0.##}/{settings.WftLaborDivisor:0.##})"
-                    : $"${settings.WageRate:0.00}/hr ÷ {effective:0.##} SF/hr";
+                    ? $"${line.WageRate:0.00}/hr ÷ {effective:0.##} SF/hr "
+                      + $"({line.Productivity:0.##} ÷ WFT {line.WftMils:0.##}/{settings.WftLaborDivisor:0.##})"
+                    : $"${line.WageRate:0.00}/hr ÷ {effective:0.##} SF/hr";
             }
 
             // Primary quantity: coating area (SF) -> the configured area variable.

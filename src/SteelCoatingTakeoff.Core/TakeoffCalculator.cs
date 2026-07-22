@@ -119,6 +119,23 @@ namespace SteelCoatingTakeoff.Core
         public static double LaborAmount(TakeoffLine line, double wageRate, double productivity, double wftLaborDivisor)
             => AreaSquareFeet(line) * LaborPricePerSquareFoot(line, wageRate, productivity, wftLaborDivisor);
 
+        // ---- Per-member overloads ----------------------------------------
+        // Labor is priced from the wage and productivity carried by the LINE. These are
+        // the forms the app and the report use; the explicit-value versions above remain
+        // for callers that are pricing a hypothetical rather than a member.
+
+        /// <summary>Effective productivity (SF/hr) using the line's own productivity.</summary>
+        public static double EffectiveProductivity(TakeoffLine line, double wftLaborDivisor)
+            => EffectiveProductivity(line, line?.Productivity ?? 0.0, wftLaborDivisor);
+
+        /// <summary>Labor price per SF using the line's own wage and productivity.</summary>
+        public static double LaborPricePerSquareFoot(TakeoffLine line, double wftLaborDivisor)
+            => LaborPricePerSquareFoot(line, line?.WageRate ?? 0.0, line?.Productivity ?? 0.0, wftLaborDivisor);
+
+        /// <summary>Labor dollars using the line's own wage and productivity.</summary>
+        public static double LaborAmount(TakeoffLine line, double wftLaborDivisor)
+            => AreaSquareFeet(line) * LaborPricePerSquareFoot(line, wftLaborDivisor);
+
         /// <summary>
         /// Round for display / transmission. Sage takeoff quantities are typically
         /// carried to 2 decimals; keep it consistent everywhere.

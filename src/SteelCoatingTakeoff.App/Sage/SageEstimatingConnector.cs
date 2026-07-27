@@ -45,6 +45,13 @@ namespace SteelCoatingTakeoff.App.Sage
         private readonly Dictionary<string, StandardDBAssemblyEntity> _assemblies =
             new Dictionary<string, StandardDBAssemblyEntity>(StringComparer.OrdinalIgnoreCase);
 
+        /// <summary>
+        /// The estimate's "hour" unit, resolved once per batch. Standard labor is ordered
+        /// in hours so wage + productivity price it (see <see cref="ApplyLabor"/>); the
+        /// only way to get the UnitEntity is off the estimate's own unit list.
+        /// </summary>
+        private UnitEntity _hourUnit;
+
         public SageConnectResult Connect(SageSettings settings)
         {
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
@@ -319,6 +326,9 @@ namespace SteelCoatingTakeoff.App.Sage
                 using (estimateService.LockEstimateTemporarily())
                 using (var cache = new TakeoffSessionCache(_estimate, _standardDB))
                 {
+                    // Needed to order standard labor lines in hours. Read once for the batch.
+                    _hourUnit = ReadHourUnit(estimateService);
+
                     foreach (var req in pending)
                     {
                         if (req == null || string.IsNullOrWhiteSpace(req.AssemblyId))
@@ -448,21 +458,27 @@ namespace SteelCoatingTakeoff.App.Sage
         }
 
         /// <summary>
-        /// Write the labor price onto the generated item(s) whose description matches
-        /// (blank match = every item), via the labor UnitPrice. Verified against a live
-        /// estimate: labor Amount = TakeoffQuantity × UnitPrice.
+        /// Write labor onto the generated item(s) whose description matches (blank match =
+        /// every item). Two mechanisms, chosen per request:
         ///
-        /// The productivity factor goes to <c>ProductivityFactor</c> (Sage's L.Prod Factor),
-        /// then is read back: on an item with no crew Sage silently normalises it to 1, so
-        /// the caller is told rather than left believing it landed.
+        ///   intumescent (<see cref="SageTakeoffRequest.LaborAsProductivity"/> false)
+        ///     → a finished $/SF into the labor UnitPrice. Amount = TakeoffQuantity × $/SF.
         ///
-        /// DO NOT also set <c>ProductivityWithFactor</c> (Sage's L.Prod). Round-tripping it
-        /// through a throwaway estimate drove UnitCost and Amount to ZERO — these coating
-        /// items carry no crew or rate table for the productivity to price against, so the
-        /// value reads back correctly but the money is gone. Give the standard-database
-        /// items a crew and both columns become usable.
+        ///   standard (LaborAsProductivity true)
+        ///     → the wage into L.Price (UnitPrice) and the productivity into L.Prod
+        ///       (ProductivityWithFactor), with the labor line ORDERED IN HOURS. Sage then
+        ///       derives ManHours = qty ÷ productivity and Amount = ManHours × wage, and an
+        ///       estimator can adjust either value in the estimate. Both are verified
+        ///       against a live estimate.
+        ///
+        /// The order unit is the crux: with it null, setting productivity drove Amount to
+        /// ZERO (there was nothing for it to convert). With it set to hours the same fields
+        /// compute correctly on these crew-less coating items.
+        ///
+        /// L.Prod Factor (ProductivityFactor) is still sent but Sage resets it to 1 on an
+        /// item with no crew rate table; the note below says so and the amount is unaffected.
         /// </summary>
-        private static void ApplyLabor(SageTakeoffRequest req, EstimateItemEntityCollection items, SageTakeoffResult result)
+        private void ApplyLabor(SageTakeoffRequest req, EstimateItemEntityCollection items, SageTakeoffResult result)
         {
             var match = req.LaborItemMatch;
             var matchAll = string.IsNullOrWhiteSpace(match);
@@ -479,28 +495,47 @@ namespace SteelCoatingTakeoff.App.Sage
                 return;
             }
 
+            // Standard labor needs the hour unit. If it could not be resolved, fall back to
+            // writing the same dollars as a fixed $/SF so labor is never silently lost.
+            var asProductivity = req.LaborAsProductivity && _hourUnit != null && req.LaborProductivity > 0;
+            if (req.LaborAsProductivity && _hourUnit == null)
+                result.Log.Add(
+                    $"NOTE: no 'hr' unit in the estimate — wrote '{req.AssemblyId}' labor as a fixed " +
+                    "$/SF instead of wage + productivity.");
+
             var crewless = 0;
 
             foreach (var item in targets)
             {
                 var labor = item.LaborCategory;
-                labor.UnitPrice = req.LaborUnitPrice;   // sets UnitCost and Amount = qty × UnitPrice
 
-                // L.Prod Factor. Safe alongside UnitPrice; see the remarks above for why
-                // the productivity itself is deliberately not written.
+                if (asProductivity)
+                {
+                    // Wage + productivity; Sage computes the amount (see remarks).
+                    labor.OrderUnit = _hourUnit;
+                    labor.ProductivityWithFactor = req.LaborProductivity;   // L.Prod (SF/hr)
+                    labor.UnitPrice = req.LaborWageRate;                    // L.Price ($/hr)
+                    labor.ConversionOperator = ConversionOperator.Divide;
+                }
+                else
+                {
+                    // Finished $/SF (intumescent, or the no-hour-unit fallback).
+                    labor.UnitPrice = req.LaborUnitPrice;   // sets UnitCost and Amount = qty × UnitPrice
+                }
+
                 if (req.LaborProductivityFactor > 0)
                     labor.ProductivityFactor = req.LaborProductivityFactor;
 
-                // Whether the factor SURVIVES cannot be detected by reading it back here:
-                // the setter accepts it, and Sage only normalises it to 1 when the entity
-                // is written. What predicts it is the crew — with no crew resources there
-                // is nothing for a productivity factor to act on.
+                // The factor's survival can't be read back mid-session (Sage normalises it
+                // on write); the crew's resource count is what predicts it.
                 if (labor.ResourceCount <= 0) crewless++;
 
                 result.Log.Add(
-                    $"  labor → '{item.Description}': ${req.LaborUnitPrice:0.####}/SF " +
-                    $"[{req.LaborBasis}] = ${labor.Amount:N2}" +
-                    $", L.Prod Factor {req.LaborProductivityFactor:0.####}");
+                    asProductivity
+                        ? $"  labor → '{item.Description}': L.Price ${req.LaborWageRate:0.##}/hr, " +
+                          $"L.Prod {req.LaborProductivity:0.##} SF/hr [{req.LaborBasis}] = ${labor.Amount:N2}"
+                        : $"  labor → '{item.Description}': ${req.LaborUnitPrice:0.####}/SF " +
+                          $"[{req.LaborBasis}] = ${labor.Amount:N2}");
             }
 
             // Don't let the estimator assume a factor they typed reached the estimate.
@@ -508,10 +543,27 @@ namespace SteelCoatingTakeoff.App.Sage
             {
                 result.Log.Add(
                     $"NOTE: L.Prod Factor {req.LaborProductivityFactor:0.####} will NOT stick on " +
-                    $"'{req.AssemblyId}' — {crewless} of {targets.Count} item(s) have no crew, and Sage " +
-                    "resets the column to 1 on write (verified against a live estimate). Assign a crew " +
-                    "to these standard-database items to make it hold. Labor cost is unaffected: it " +
-                    "comes from the $/SF above.");
+                    $"'{req.AssemblyId}' — {crewless} of {targets.Count} item(s) have no crew rate table, " +
+                    "and Sage resets the column to 1 on write. Labor cost is unaffected.");
+            }
+        }
+
+        /// <summary>
+        /// The estimate's hour unit, for ordering standard labor lines in hours. There is
+        /// no lighter unit-read on the SDK, so this reads the estimate's entities; the unit
+        /// list is small and static, and the result is cached for the batch.
+        /// </summary>
+        private static UnitEntity ReadHourUnit(EstimateService estimateService)
+        {
+            try
+            {
+                var units = estimateService.ReadEntities().Units;
+                return units.FirstOrDefault(u => string.Equals(u.Name, "hr", StringComparison.OrdinalIgnoreCase))
+                    ?? units.FirstOrDefault(u => string.Equals(u.Name, "hour", StringComparison.OrdinalIgnoreCase));
+            }
+            catch
+            {
+                return null;   // ApplyLabor falls back to a fixed $/SF and logs it.
             }
         }
 

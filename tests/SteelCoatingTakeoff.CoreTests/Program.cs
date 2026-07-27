@@ -318,6 +318,20 @@ namespace SteelCoatingTakeoff.CoreTests
             Near("per-member request price follows the member",
                 TakeoffRequestBuilder.Build(dear, prodSettings).LaborUnitPrice, 0.80);
 
+            Console.WriteLine("\nLabor delivery mode (intumescent $/SF vs standard wage+productivity):");
+            // Standard: send wage + productivity, NOT a computed $/SF.
+            var stdReq3 = TakeoffRequestBuilder.Build(dear, prodSettings);
+            Check("standard sends wage + productivity", stdReq3.LaborAsProductivity);
+            Near("standard carries the wage", stdReq3.LaborWageRate, 80.0);
+            Near("standard carries the productivity", stdReq3.LaborProductivity, 100.0);
+            Check("standard basis mentions L.Price/L.Prod", stdReq3.LaborBasis.Contains("L.Price") && stdReq3.LaborBasis.Contains("L.Prod"));
+
+            // Intumescent: send a finished $/SF, no wage/productivity split.
+            var intReq3 = TakeoffRequestBuilder.Build(int20, prodSettings);   // int20: wage 50, prod 100, WFT 20
+            Check("intumescent sends a fixed $/SF", !intReq3.LaborAsProductivity);
+            Near("intumescent $/SF = WFT/5 x wage/prod = 2.00", intReq3.LaborUnitPrice, 2.00);
+            Check("intumescent basis shows the $/SF", intReq3.LaborBasis.Contains("/SF"));
+
             Console.WriteLine("\nPDF report:");
             var pdfPath = Path.Combine(Path.GetTempPath(), "steelcoating-test-" + Guid.NewGuid().ToString("N") + ".pdf");
             try

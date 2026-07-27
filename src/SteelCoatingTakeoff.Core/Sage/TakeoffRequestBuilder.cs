@@ -32,23 +32,43 @@ namespace SteelCoatingTakeoff.Core.Sage
                 Description = Describe(line, area)
             };
 
-            // Labor price/SF = wage ÷ effective productivity, where thickness divides the
-            // productivity on intumescent lines. Wage and productivity come from the LINE,
-            // so members can be priced individually. Coats is not part of this rate — it
-            // is already in the area quantity.
+            // Labor. Wage and productivity come from the LINE, so members can be priced
+            // individually. How it reaches Sage depends on the coating type:
+            //
+            //   intumescent → a fixed $/SF (WFT/divisor × wage/productivity) as the labor
+            //                 UnitPrice; thickness has divided the productivity already.
+            //   standard    → the wage and productivity themselves, so Sage computes the
+            //                 amount from them and they stay adjustable in the estimate.
+            //
+            // The dollar total is the same either way (area × wage/effective-productivity);
+            // only the field it lands in differs. Coats is not part of the rate — it is
+            // already in the area quantity.
             var pricePerSf = TakeoffCalculator.LaborPricePerSquareFoot(line, settings.WftLaborDivisor);
             if (pricePerSf > 0)
             {
                 var effective = TakeoffCalculator.EffectiveProductivity(line, settings.WftLaborDivisor);
                 req.AppliesLabor = true;
                 req.LaborItemMatch = settings.LaborItemMatchFor(line.Coating);
-                req.LaborUnitPrice = TakeoffCalculator.RoundQty(pricePerSf, 4);
                 req.EffectiveProductivity = effective;
                 req.LaborProductivityFactor = line.LaborProductivityFactor;
-                req.LaborBasis = line.Coating == CoatingType.Intumescent
-                    ? $"${line.WageRate:0.00}/hr ÷ {effective:0.##} SF/hr "
-                      + $"({line.Productivity:0.##} ÷ WFT {line.WftMils:0.##}/{settings.WftLaborDivisor:0.##})"
-                    : $"${line.WageRate:0.00}/hr ÷ {effective:0.##} SF/hr";
+                req.LaborUnitPrice = TakeoffCalculator.RoundQty(pricePerSf, 4);
+
+                if (line.Coating == CoatingType.Intumescent)
+                {
+                    req.LaborAsProductivity = false;
+                    req.LaborBasis =
+                        $"${line.WageRate:0.00}/hr ÷ {effective:0.##} SF/hr "
+                        + $"({line.Productivity:0.##} ÷ WFT {line.WftMils:0.##}/{settings.WftLaborDivisor:0.##})"
+                        + $" = ${req.LaborUnitPrice:0.####}/SF";
+                }
+                else
+                {
+                    req.LaborAsProductivity = true;
+                    req.LaborWageRate = TakeoffCalculator.RoundQty(line.WageRate, 4);
+                    req.LaborProductivity = TakeoffCalculator.RoundQty(line.Productivity, 4);
+                    req.LaborBasis =
+                        $"L.Price ${line.WageRate:0.00}/hr, L.Prod {line.Productivity:0.##} SF/hr → Sage computes ${req.LaborUnitPrice:0.####}/SF";
+                }
             }
 
             // Primary quantity: coating area (SF) -> the configured area variable.

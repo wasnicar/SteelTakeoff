@@ -143,17 +143,26 @@ namespace SteelCoatingTakeoff.Core
 
                 steps.Add(new CalculationStep(
                     "Labor $/SF",
-                    $"${line.WageRate:0.00}/hr ÷ {Num(effective)} SF/hr  =  ${pricePerSf:0.####} /SF" +
-                    "  → item labor UnitPrice"));
+                    $"${line.WageRate:0.00}/hr ÷ {Num(effective)} SF/hr  =  ${pricePerSf:0.####} /SF"));
                 steps.Add(new CalculationStep(
                     "Labor total",
                     $"{rounded:0.00} SF  ×  ${pricePerSf:0.####}  =  ${amount:N2}"));
 
+                // How the labor reaches Sage differs by coating type.
+                steps.Add(line.Coating == CoatingType.Intumescent
+                    ? new CalculationStep(
+                        "Sent to Sage",
+                        $"${pricePerSf:0.####}/SF written as the labor UnitPrice — a fixed price per square foot.")
+                    : new CalculationStep(
+                        "Sent to Sage",
+                        $"L.Price ${line.WageRate:0.00}/hr and L.Prod {Num(line.Productivity)} SF/hr (labor ordered in " +
+                        "hours). Sage computes the amount from them, and both stay adjustable in the estimate."));
+
                 steps.Add(new CalculationStep(
                     "L.Prod Factor",
                     $"{Num(line.LaborProductivityFactor)}  → sent to Sage's L.Prod Factor column. " +
-                    "It does not change the $/SF above. Sage only keeps this on an item that has a " +
-                    "crew; on these coating items it resets to 1 and the activity log says so."));
+                    "It does not change the $/SF above, and Sage keeps it only on an item that has a " +
+                    "crew rate table; on these coating items it resets to 1."));
             }
 
             // ---- routing -----------------------------------------------------

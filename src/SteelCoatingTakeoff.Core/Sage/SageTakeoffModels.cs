@@ -48,8 +48,26 @@ namespace SteelCoatingTakeoff.Core.Sage
         /// </summary>
         public string LaborItemMatch { get; set; }
 
-        /// <summary>Labor price per SF → item labor UnitPrice (Sage Amount = qty × this).</summary>
+        /// <summary>
+        /// How labor reaches Sage, decided by coating type:
+        ///
+        ///   false (intumescent) → send a finished $/SF as the labor UnitPrice
+        ///                         (<see cref="LaborUnitPrice"/>). Sage: Amount = qty × $/SF.
+        ///   true  (standard)    → send the wage and productivity into Sage's own L.Price
+        ///                         and L.Prod, with the labor line ordered in hours, so
+        ///                         Sage computes the amount and an estimator can adjust
+        ///                         either value there. Verified against a live estimate.
+        /// </summary>
+        public bool LaborAsProductivity { get; set; }
+
+        /// <summary>Labor price per SF → item labor UnitPrice (intumescent). Sage Amount = qty × this.</summary>
         public double LaborUnitPrice { get; set; }
+
+        /// <summary>Hourly wage → L.Price (standard lines, when <see cref="LaborAsProductivity"/>).</summary>
+        public double LaborWageRate { get; set; }
+
+        /// <summary>Productivity (SF/hr) → L.Prod (standard lines, when <see cref="LaborAsProductivity"/>).</summary>
+        public double LaborProductivity { get; set; }
 
         /// <summary>
         /// Productivity factor → item labor ProductivityFactor (Sage's L.Prod Factor).

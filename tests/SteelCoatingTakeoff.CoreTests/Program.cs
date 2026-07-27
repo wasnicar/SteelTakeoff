@@ -366,6 +366,48 @@ namespace SteelCoatingTakeoff.CoreTests
             }
             finally { if (File.Exists(pdfPath)) File.Delete(pdfPath); }
 
+            Console.WriteLine("\nFire rating (informational only):");
+            var frLine = Priced(new TakeoffLine
+            {
+                Family = db.GetFamily("W"), Shape = w12, LinearFeet = 100,
+                Coating = CoatingType.Intumescent, WftMils = 20, FireRating = "2 hr"
+            });
+            var noFrLine = Priced(new TakeoffLine
+            {
+                Family = db.GetFamily("W"), Shape = w12, LinearFeet = 100, Coating = CoatingType.Standard
+            });
+            // Fire rating must not touch area or labor.
+            Near("fire rating does not change area",
+                TakeoffCalculator.AreaSquareFeet(frLine), TakeoffCalculator.AreaSquareFeet(noFrLine), 0.001);
+            var frReq = TakeoffRequestBuilder.Build(frLine, prodSettings);
+            Check("fire rating flows onto the request", frReq.FireRating == "2 hr", frReq.FireRating);
+            Check("assembly label folds in the fire rating",
+                frReq.AssemblyLabel() == "W12 × 26 · FR 2 hr", frReq.AssemblyLabel());
+            Check("assembly label omits fire rating when blank",
+                TakeoffRequestBuilder.Build(noFrLine, prodSettings).AssemblyLabel() == "W12 × 26");
+
+            Console.WriteLine("\nSupplier report (quantities only, no costs):");
+            var supPath = Path.Combine(Path.GetTempPath(), "steelcoating-sup-" + Guid.NewGuid().ToString("N") + ".pdf");
+            try
+            {
+                var supLines = new[] { frLine, noFrLine };
+                SupplierReport.Write(supPath, supLines, prodSettings, "Riverside Plant", new DateTime(2026, 7, 27, 9, 0, 0));
+                var bytes = File.ReadAllBytes(supPath);
+                var text = Encoding.GetEncoding(28591).GetString(bytes);
+
+                Check("supplier pdf written", bytes.Length > 1000, $"{bytes.Length} bytes");
+                Check("supplier pdf is well-formed", text.StartsWith("%PDF-1.4") && text.TrimEnd().EndsWith("%%EOF"));
+                Check("supplier pdf titled for the supplier", text.Contains("Supplier"));
+                Check("supplier pdf has a Fire Rating column", text.Contains("Fire Rating"));
+                Check("supplier pdf shows the fire rating value", text.Contains("2 hr"));
+                Check("supplier pdf asks for WFT", text.Contains("WFT"));
+                // The whole point: no pricing leaks to the supplier.
+                Check("supplier pdf has NO dollar figures", !text.Contains("$"));
+                Check("supplier pdf has no wage/labor columns",
+                    !text.Contains("Wage") && !text.Contains("Labor"));
+            }
+            finally { if (File.Exists(supPath)) File.Delete(supPath); }
+
             Console.WriteLine("\nMock connector end-to-end:");
             var log = new List<string>();
             using (var conn = new MockSageConnector(m => log.Add(m)))

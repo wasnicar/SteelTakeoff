@@ -438,14 +438,15 @@ namespace SteelCoatingTakeoff.App.Sage
                     ApplyLabor(req, items, result);
 
                 // Each member is its own assembly takeoff, so it can carry its own
-                // description — stamp the steel type/size onto it.
-                if (!string.IsNullOrWhiteSpace(req.MemberLabel))
+                // description — stamp the steel type/size (and fire rating) onto it.
+                var memberLabel = req.AssemblyLabel();
+                if (!string.IsNullOrWhiteSpace(memberLabel))
                 {
                     var estimateAssembly = session.Assembly;
                     var baseDescription = assembly.Description;
                     estimateAssembly.Description = string.IsNullOrWhiteSpace(baseDescription)
-                        ? req.MemberLabel
-                        : $"{req.MemberLabel} — {baseDescription}";
+                        ? memberLabel
+                        : $"{memberLabel} — {baseDescription}";
                 }
 
                 session.CommitEntitiesToCache();

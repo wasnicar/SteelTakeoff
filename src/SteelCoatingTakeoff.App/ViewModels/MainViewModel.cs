@@ -149,6 +149,7 @@ namespace SteelCoatingTakeoff.App.ViewModels
         public ICommand TestConnectionCommand { get; }
         public ICommand ExportCsvCommand { get; }
         public ICommand ExportPdfCommand { get; }
+        public ICommand ExportSupplierPdfCommand { get; }
         public ICommand SaveSettingsCommand { get; }
         public ICommand LoadAssembliesCommand { get; }
 
@@ -169,6 +170,7 @@ namespace SteelCoatingTakeoff.App.ViewModels
             TestConnectionCommand = new RelayCommand(async _ => await TestConnectionAsync(), _ => IsNotBusy);
             ExportCsvCommand = new RelayCommand(ExportCsv, () => Rows.Count > 0);
             ExportPdfCommand = new RelayCommand(ExportPdf, () => Rows.Count > 0);
+            ExportSupplierPdfCommand = new RelayCommand(ExportSupplierPdf, () => Rows.Count > 0);
             SaveSettingsCommand = new RelayCommand(() =>
             {
                 SettingsStore.Save(Settings);
@@ -603,49 +605,56 @@ namespace SteelCoatingTakeoff.App.ViewModels
         }
 
         /// <summary>
-        /// Clean PDF of the takeoff: member descriptions, quantities, labor and totals.
-        /// Offers to open it, since the point of exporting is usually to send it on.
+        /// Cost/estimator PDF: member descriptions, quantities, labor and totals.
         /// </summary>
-        private void ExportPdf()
+        private void ExportPdf() => ExportReport(
+            "Export PDF", "coating-takeoff",
+            path => TakeoffReport.Write(path, Rows.Select(r => r.ToLine()), Settings, Settings.EstimateName, DateTime.Now));
+
+        /// <summary>
+        /// Supplier PDF: quantities and variables (including fire rating) with a blank WFT
+        /// column, and no pricing — the sheet a coatings supplier fills in with the WFT.
+        /// </summary>
+        private void ExportSupplierPdf() => ExportReport(
+            "Supplier report", "supplier-request",
+            path => SupplierReport.Write(path, Rows.Select(r => r.ToLine()), Settings, Settings.EstimateName, DateTime.Now));
+
+        /// <summary>
+        /// Prompt for a path, write the report, and offer to open it. Shared by both PDFs
+        /// so the save/error/open flow stays identical.
+        /// </summary>
+        private void ExportReport(string title, string filePrefix, Action<string> write)
         {
             var dlg = new SaveFileDialog
             {
-                FileName = SuggestedReportName(),
+                FileName = SuggestedReportName(filePrefix),
                 Filter = "PDF file (*.pdf)|*.pdf",
                 DefaultExt = ".pdf"
             };
             if (dlg.ShowDialog() != true) return;
 
-            try
-            {
-                TakeoffReport.Write(
-                    dlg.FileName,
-                    Rows.Select(r => r.ToLine()),
-                    Settings,
-                    Settings.EstimateName,
-                    DateTime.Now);
-            }
+            try { write(dlg.FileName); }
             catch (Exception ex)
             {
-                Log("PDF export failed: " + ex.Message);
+                Log(title + " failed: " + ex.Message);
                 MessageBox.Show("Could not write the PDF:\n\n" + ex.Message,
-                                "Export PDF", MessageBoxButton.OK, MessageBoxImage.Warning);
+                                title, MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
             Log("Exported " + dlg.FileName);
             if (MessageBox.Show("PDF saved.\n\n" + dlg.FileName + "\n\nOpen it now?",
-                                "Export PDF", MessageBoxButton.YesNo, MessageBoxImage.Information) == MessageBoxResult.Yes)
+                                title, MessageBoxButton.YesNo, MessageBoxImage.Information) == MessageBoxResult.Yes)
             {
                 try { Process.Start(new ProcessStartInfo(dlg.FileName) { UseShellExecute = true }); }
                 catch (Exception ex) { Log("Could not open the PDF: " + ex.Message); }
             }
         }
 
-        /// <summary>"coating-takeoff-<estimate>-<date>.pdf", scrubbed of path-illegal characters.</summary>
-        private string SuggestedReportName()
+        /// <summary>"&lt;prefix&gt;-&lt;estimate&gt;-&lt;date&gt;.pdf", scrubbed of path-illegal characters.</summary>
+        private string SuggestedReportName(string prefix)
         {
-            var name = "coating-takeoff";
+            var name = prefix;
             if (!string.IsNullOrWhiteSpace(Settings.EstimateName))
             {
                 var estimate = Settings.EstimateName.Trim();

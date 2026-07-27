@@ -25,6 +25,7 @@ namespace SteelCoatingTakeoff.Core.Sage
             {
                 AiscKey = line.Shape?.AiscKey,
                 MemberLabel = line.Shape?.Display,
+                FireRating = line.FireRating,
                 Coating = line.Coating,
                 AssemblyId = settings.AssemblyFor(line.Coating),
                 AreaSquareFeet = area,

@@ -29,6 +29,7 @@ namespace SteelCoatingTakeoff.App.ViewModels
         private bool _isIntumescent;
         private double _wftMils;
         private int _coats = 1;
+        private string _fireRating = "";
         private bool _isSelected;
         private double _wageRate;
         private double _productivity;
@@ -43,6 +44,7 @@ namespace SteelCoatingTakeoff.App.ViewModels
             _settings = settings;
             _wftMils = settings?.DefaultWftMils ?? 0;
             _coats = settings?.DefaultCoats > 0 ? settings.DefaultCoats : 1;
+            _fireRating = settings?.DefaultFireRating ?? "";
 
             // Labor is per member; the settings supply the starting values for a new one.
             _wageRate = settings?.WageRate ?? 0.0;
@@ -148,6 +150,17 @@ namespace SteelCoatingTakeoff.App.ViewModels
             set { if (Set(ref _coats, value)) NotifyComputed(); }
         }
 
+        /// <summary>
+        /// Required fire rating for this member (free text, e.g. "2 hr"). Informational:
+        /// it rides onto the supplier report and the Sage assembly description, and does
+        /// not affect area or labor — so no recompute, just a totals-neutral notify.
+        /// </summary>
+        public string FireRating
+        {
+            get => _fireRating;
+            set { if (Set(ref _fireRating, value)) Changed?.Invoke(this, EventArgs.Empty); }
+        }
+
         public bool IsPlate => SelectedFamily != null && SelectedFamily.IsPlate;
         public string CoatingLabel => IsIntumescent ? "Intumescent" : "Standard";
 
@@ -174,6 +187,7 @@ namespace SteelCoatingTakeoff.App.ViewModels
             Coating = Coating,
             WftMils = WftMils,
             Coats = Coats,
+            FireRating = FireRating,
             WageRate = WageRate,
             Productivity = Productivity,
             LaborProductivityFactor = LaborProductivityFactor

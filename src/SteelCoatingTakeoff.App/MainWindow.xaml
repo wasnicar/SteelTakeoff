@@ -32,7 +32,7 @@
 
                 <!-- Footer -->
                 <TextBlock DockPanel.Dock="Bottom" Margin="6,10,0,0" FontSize="11" Foreground="{StaticResource Muted}"
-                           Text="v2.9 · Sage Estimating 25.2"/>
+                           Text="v3.0 · Sage Estimating 25.2"/>
 
                 <!-- Nav -->
                 <StackPanel DockPanel.Dock="Top">
@@ -86,6 +86,13 @@
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE749;" FontSize="14" Margin="0,0,7,0" VerticalAlignment="Center"/>
                                 <TextBlock Text="Export PDF" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Command="{Binding ExportSupplierPdfCommand}"
+                                ToolTip="Supplier request PDF: quantities, fire ratings and a blank WFT column — no pricing.">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE8A5;" FontSize="14" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="Supplier report" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
                         <Button Style="{StaticResource Primary}" Command="{Binding SendAllCommand}" Margin="0">
@@ -208,6 +215,11 @@
                                         <TextBlock Text="Coats" Style="{StaticResource InlineFieldLabel}"/>
                                         <TextBox Text="{Binding Settings.DefaultCoats, StringFormat={}{0}}"
                                                  Style="{StaticResource InlineField}"/>
+
+                                        <TextBlock Text="Fire rating" Style="{StaticResource InlineFieldLabel}"/>
+                                        <TextBox Text="{Binding Settings.DefaultFireRating}"
+                                                 Style="{StaticResource InlineField}" TextAlignment="Left"
+                                                 ToolTip="Fire rating pre-filled into new members, e.g. &quot;2 hr&quot;. Informational — for the supplier report and the Sage assembly description."/>
 
                                         <TextBlock Text="Wage $/hr" Style="{StaticResource InlineFieldLabel}"/>
                                         <TextBox Text="{Binding Settings.WageRate, StringFormat={}{0:0.##}}"
@@ -380,6 +392,16 @@
                                                             <Setter TargetName="badgeTxt" Property="Foreground" Value="{StaticResource AmberInk}"/>
                                                         </DataTrigger>
                                                     </DataTemplate.Triggers>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+
+                                        <DataGridTemplateColumn Header="Fire rating" Width="0.8*">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <TextBox Text="{Binding FireRating, UpdateSourceTrigger=PropertyChanged}"
+                                                             TextAlignment="Left" Margin="6,4"
+                                                             ToolTip="Required fire rating (e.g. &quot;2 hr&quot;). Informational: it appears on the supplier report and the Sage assembly description; no effect on area or cost."/>
                                                 </DataTemplate>
                                             </DataGridTemplateColumn.CellTemplate>
                                         </DataGridTemplateColumn>

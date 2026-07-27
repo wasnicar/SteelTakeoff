@@ -110,6 +110,13 @@ namespace SteelCoatingTakeoff.Core.Sage
         public int DefaultCoats { get; set; } = 1;
 
         /// <summary>
+        /// Fire rating pre-filled into each new member, e.g. "2 hr". Free text; the
+        /// estimator overrides it per member. Informational only — it drives the supplier's
+        /// WFT recommendation and the assembly description, not any quantity or cost.
+        /// </summary>
+        public string DefaultFireRating { get; set; } = "";
+
+        /// <summary>
         /// Which generated item carries the labor on the INTUMESCENT assembly, matched by
         /// a case-insensitive substring of the item description. Default "Insulation"
         /// targets the film line ("Generic Insulation Coat 1").

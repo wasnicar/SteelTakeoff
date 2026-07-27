@@ -31,6 +31,14 @@ namespace SteelCoatingTakeoff.Core.Model
         /// </summary>
         public int Coats { get; set; } = 1;
 
+        /// <summary>
+        /// Required fire rating for this member, e.g. "2 hr". Free text — it is the
+        /// information a coatings supplier needs to specify the WFT. It has NO effect on
+        /// area or labor; it only travels onto the supplier report and into the generated
+        /// assembly's Sage description.
+        /// </summary>
+        public string FireRating { get; set; } = "";
+
         // ---- Labor, per member -------------------------------------------
         // Wage and productivity are carried by the LINE, not by settings: two members
         // in the same takeoff can be priced by different crews, and intumescent work

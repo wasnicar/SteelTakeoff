@@ -90,7 +90,7 @@ namespace SteelCoatingTakeoff.Core.Reporting
 
                 var index = rows.IndexOf(line) + 1;
                 pdf.TextRight(XNum, y, index.ToString(), BodySize, PdfFont.Mono, 0.45);
-                pdf.Text(XMember, y, Fit(MemberLabel(line), XMemberWidth), BodySize);
+                pdf.Text(XMember, y, ReportShared.Fit(ReportShared.MemberLabel(line), XMemberWidth, BodySize, PdfFont.Regular), BodySize);
                 pdf.Text(XCoating, y, intumescent ? "Intumescent" : "Standard", BodySize, PdfFont.Regular,
                          intumescent ? 0.35 : 0.0);
                 pdf.TextRight(XCoats, y, line.Coats > 0 ? line.Coats.ToString() : "1", BodySize);
@@ -184,24 +184,5 @@ namespace SteelCoatingTakeoff.Core.Reporting
             pdf.TextRight(Right, Margin - 8.0, "Page " + page, 7.5, PdfFont.Mono, 0.55);
         }
 
-        private static string MemberLabel(TakeoffLine line)
-        {
-            var shape = line.Shape?.Display ?? "(shape)";
-            if (line.Family != null && line.Family.IsPlate && line.PlateWidthInches > 0)
-                return $"{shape} @ {line.PlateWidthInches:0.##}\" wide";
-            return shape;
-        }
-
-        /// <summary>Truncate to fit a column, with an ellipsis so a clipped name is obvious.</summary>
-        private static string Fit(string text, double maxWidth)
-        {
-            if (string.IsNullOrEmpty(text)) return "";
-            if (PdfWriter.Width(text, BodySize, PdfFont.Regular) <= maxWidth) return text;
-            var keep = text;
-            while (keep.Length > 1 &&
-                   PdfWriter.Width(keep + "...", BodySize, PdfFont.Regular) > maxWidth)
-                keep = keep.Substring(0, keep.Length - 1);
-            return keep + "...";
-        }
     }
 }

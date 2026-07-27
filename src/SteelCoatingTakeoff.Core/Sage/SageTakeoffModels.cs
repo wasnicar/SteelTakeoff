@@ -35,6 +35,25 @@ namespace SteelCoatingTakeoff.Core.Sage
         /// </summary>
         public string MemberLabel { get; set; }
 
+        /// <summary>
+        /// Required fire rating for this member (e.g. "2 hr"). Folded into the assembly
+        /// description via <see cref="AssemblyLabel"/>. Informational — no cost/quantity effect.
+        /// </summary>
+        public string FireRating { get; set; }
+
+        /// <summary>
+        /// The member label stamped onto the estimate assembly, with the fire rating folded
+        /// in when present — e.g. "W12 × 26 · FR 2 hr". Kept here (not in the connector) so
+        /// the composition is unit-testable without the SDK.
+        /// </summary>
+        public string AssemblyLabel()
+        {
+            var label = MemberLabel ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(FireRating))
+                label = label.Length == 0 ? $"FR {FireRating.Trim()}" : $"{label} · FR {FireRating.Trim()}";
+            return label;
+        }
+
         // ---- Labor (set when a wage + productivity are configured) ----------
         // Labor price/SF = wage/productivity, times the WFT factor for intumescent.
         // The connector writes it onto the item(s) matched by LaborItemMatch.

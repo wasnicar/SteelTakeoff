@@ -20,7 +20,40 @@ namespace SteelCoatingTakeoff.App
         {
             InitializeComponent();
             DataContext = new MainViewModel();
+            PreviewKeyDown += MainWindow_PreviewKeyDown;
         }
+
+        /// <summary>Ctrl+S saves the current project, prompting for a name the first time.</summary>
+        private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.S && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+            {
+                e.Handled = true;
+                SaveOrPrompt();
+            }
+        }
+
+        private void SaveOrPrompt()
+        {
+            if (Vm == null) return;
+            if (Vm.HasCurrentProject)
+            {
+                if (!Vm.SaveCurrent(out var error))
+                    MessageBox.Show(this, error, "Save takeoff", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            else
+            {
+                // No name yet — let the user name it in the projects window.
+                OpenProjects();
+            }
+        }
+
+        private void OpenProjects()
+        {
+            new ProjectsWindow(DataContext, this).ShowDialog();
+        }
+
+        private void OpenProjects_Click(object sender, RoutedEventArgs e) => OpenProjects();
 
         /// <summary>
         /// Push the tick into the row on the click itself. A template checkbox in a

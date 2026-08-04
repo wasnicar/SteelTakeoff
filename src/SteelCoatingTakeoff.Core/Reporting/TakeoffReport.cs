@@ -22,15 +22,17 @@ namespace SteelCoatingTakeoff.Core.Reporting
         private const double BodySize = 8.5;
 
         // Right edge of each numeric column; text columns note their left edge.
-        private const double XNum = 52.0;
-        private const double XMember = 60.0;
-        private const double XMemberWidth = 120.0;
-        private const double XCoating = 186.0;
-        private const double XCoats = 286.0;
-        private const double XWft = 330.0;
-        private const double XLf = 388.0;
-        private const double XSfLf = 444.0;
-        private const double XArea = 510.0;
+        private const double XNum = 50.0;
+        private const double XMember = 58.0;
+        private const double XMemberWidth = 100.0;
+        private const double XType = 166.0;
+        private const double XTypeWidth = 62.0;
+        private const double XCoating = 236.0;
+        private const double XCoats = 300.0;
+        private const double XWft = 340.0;
+        private const double XLf = 392.0;
+        private const double XSfLf = 446.0;
+        private const double XArea = 508.0;
         private const double XWage = 566.0;
         private const double XProd = 622.0;
         private const double XRate = 678.0;
@@ -89,9 +91,11 @@ namespace SteelCoatingTakeoff.Core.Reporting
                 if (intumescent) intumescentArea += area; else standardArea += area;
 
                 var index = rows.IndexOf(line) + 1;
+                var type = MemberClassification.ShortLabel(line.MemberType, line.Support);
                 pdf.TextRight(XNum, y, index.ToString(), BodySize, PdfFont.Mono, 0.45);
                 pdf.Text(XMember, y, ReportShared.Fit(ReportShared.MemberLabel(line), XMemberWidth, BodySize, PdfFont.Regular), BodySize);
-                pdf.Text(XCoating, y, intumescent ? "Intumescent" : "Standard", BodySize, PdfFont.Regular,
+                pdf.Text(XType, y, ReportShared.Fit(type, XTypeWidth, BodySize, PdfFont.Regular), BodySize, PdfFont.Regular, 0.2);
+                pdf.Text(XCoating, y, intumescent ? "Intum." : "Std", BodySize, PdfFont.Regular,
                          intumescent ? 0.35 : 0.0);
                 pdf.TextRight(XCoats, y, line.Coats > 0 ? line.Coats.ToString() : "1", BodySize);
                 pdf.TextRight(XWft, y, intumescent && line.WftMils > 0 ? line.WftMils.ToString("0.##") : "-", BodySize);
@@ -141,7 +145,8 @@ namespace SteelCoatingTakeoff.Core.Reporting
             // Column header band.
             pdf.Rect(Margin, y - 4.0, Right - Margin, 14.0, 0.92);
             pdf.Text(XMember, y, "Member", 8.5, PdfFont.Bold);
-            pdf.Text(XCoating, y, "Coating", 8.5, PdfFont.Bold);
+            pdf.Text(XType, y, "Type", 8.5, PdfFont.Bold);
+            pdf.Text(XCoating, y, "Coat", 8.5, PdfFont.Bold);
             pdf.TextRight(XCoats, y, "Coats", 8.5, PdfFont.MonoBold);
             pdf.TextRight(XWft, y, "WFT", 8.5, PdfFont.MonoBold);
             pdf.TextRight(XLf, y, "LF", 8.5, PdfFont.MonoBold);

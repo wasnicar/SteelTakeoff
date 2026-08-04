@@ -42,16 +42,23 @@ namespace SteelCoatingTakeoff.Core.Sage
         public string FireRating { get; set; }
 
         /// <summary>
-        /// The member label stamped onto the estimate assembly, with the fire rating folded
-        /// in when present — e.g. "W12 × 26 · FR 2 hr". Kept here (not in the connector) so
-        /// the composition is unit-testable without the SDK.
+        /// Member classification (e.g. "Column/Floor", "Beam"). Folded into the assembly
+        /// description. Informational — no cost/quantity effect.
+        /// </summary>
+        public string MemberClass { get; set; }
+
+        /// <summary>
+        /// The member label stamped onto the estimate assembly, with the classification and
+        /// fire rating folded in when present — e.g. "W12 × 26 · Column/Floor · FR 2 hr".
+        /// Kept here (not in the connector) so the composition is unit-testable without the SDK.
         /// </summary>
         public string AssemblyLabel()
         {
-            var label = MemberLabel ?? string.Empty;
-            if (!string.IsNullOrWhiteSpace(FireRating))
-                label = label.Length == 0 ? $"FR {FireRating.Trim()}" : $"{label} · FR {FireRating.Trim()}";
-            return label;
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(MemberLabel)) parts.Add(MemberLabel.Trim());
+            if (!string.IsNullOrWhiteSpace(MemberClass)) parts.Add(MemberClass.Trim());
+            if (!string.IsNullOrWhiteSpace(FireRating)) parts.Add("FR " + FireRating.Trim());
+            return string.Join(" · ", parts);
         }
 
         // ---- Labor (set when a wage + productivity are configured) ----------

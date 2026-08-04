@@ -6,6 +6,7 @@ using System.Runtime.Serialization.Json;
 using System.Text;
 using SteelCoatingTakeoff.Core;
 using SteelCoatingTakeoff.Core.Model;
+using SteelCoatingTakeoff.Core.Projects;
 using SteelCoatingTakeoff.Core.Reporting;
 using SteelCoatingTakeoff.Core.Sage;
 
@@ -407,6 +408,61 @@ namespace SteelCoatingTakeoff.CoreTests
                     !text.Contains("Wage") && !text.Contains("Labor"));
             }
             finally { if (File.Exists(supPath)) File.Delete(supPath); }
+
+            Console.WriteLine("\nMember classification (Column/Beam + Floor/Roof):");
+            Check("column + floor label", MemberClassification.ShortLabel(MemberKind.Column, SupportKind.Floor) == "Column/Floor");
+            Check("column + roof label", MemberClassification.ShortLabel(MemberKind.Column, SupportKind.Roof) == "Column/Roof");
+            Check("bare column label", MemberClassification.ShortLabel(MemberKind.Column, SupportKind.Unspecified) == "Column");
+            // Support is meaningless on a beam and must be dropped from the label.
+            Check("beam ignores support", MemberClassification.ShortLabel(MemberKind.Beam, SupportKind.Floor) == "Beam");
+            Check("unspecified is blank", MemberClassification.ShortLabel(MemberKind.Unspecified, SupportKind.Roof) == "");
+
+            var colLine = Priced(new TakeoffLine
+            {
+                Family = db.GetFamily("W"), Shape = w12, LinearFeet = 100,
+                Coating = CoatingType.Intumescent, WftMils = 20, FireRating = "2 hr",
+                MemberType = MemberKind.Column, Support = SupportKind.Roof
+            });
+            Near("classification does not change area",
+                TakeoffCalculator.AreaSquareFeet(colLine), TakeoffCalculator.AreaSquareFeet(frLine), 0.001);
+            var colReq = TakeoffRequestBuilder.Build(colLine, prodSettings);
+            Check("request carries the classification", colReq.MemberClass == "Column/Roof", colReq.MemberClass);
+            Check("assembly label folds in class + fire rating",
+                colReq.AssemblyLabel() == "W12 × 26 · Column/Roof · FR 2 hr", colReq.AssemblyLabel());
+
+            Console.WriteLine("\nProject save/load round-trip:");
+            var projDir = Path.Combine(Path.GetTempPath(), "sctk-proj-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var project = new TakeoffProject
+                {
+                    Name = "Riverside", EstimateName = "Estimate 1",
+                    Lines = new List<SavedTakeoffLine> { ProjectMapper.FromLine(colLine), ProjectMapper.FromLine(noFrLine) }
+                };
+                var path = ProjectStore.PathFor(projDir, "Riverside");
+                ProjectStore.Save(path, project);
+
+                Check("project file written", File.Exists(path));
+                Check("project listed", ProjectStore.List(projDir).Any(p => p.Name == "Riverside" && p.MemberCount == 2));
+
+                var loaded = ProjectStore.Load(path);
+                Check("round-trip: name", loaded.Name == "Riverside");
+                Check("round-trip: estimate", loaded.EstimateName == "Estimate 1");
+                Check("round-trip: line count", loaded.Lines.Count == 2, loaded.Lines.Count.ToString());
+
+                var back = ProjectMapper.ToLine(loaded.Lines[0], db);
+                Check("round-trip: shape resolved", back.Shape != null && back.Shape.AiscKey == w12.AiscKey);
+                Check("round-trip: coating", back.Coating == CoatingType.Intumescent);
+                Near("round-trip: WFT", back.WftMils, 20.0);
+                Near("round-trip: wage", back.WageRate, 50.0);
+                Check("round-trip: fire rating", back.FireRating == "2 hr");
+                Check("round-trip: member type", back.MemberType == MemberKind.Column);
+                Check("round-trip: support", back.Support == SupportKind.Roof);
+
+                ProjectStore.Delete(path);
+                Check("project deleted", !File.Exists(path));
+            }
+            finally { if (Directory.Exists(projDir)) Directory.Delete(projDir, true); }
 
             Console.WriteLine("\nMock connector end-to-end:");
             var log = new List<string>();

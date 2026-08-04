@@ -22,18 +22,20 @@ namespace SteelCoatingTakeoff.Core.Reporting
         private const double BodySize = 9.0;
 
         // Text columns give a left edge; numeric columns a right edge.
-        private const double XNum = 52.0;
-        private const double XMember = 62.0;
-        private const double XMemberWidth = 150.0;
-        private const double XCoating = 224.0;
-        private const double XFire = 322.0;
-        private const double XFireWidth = 96.0;
-        private const double XCoats = 470.0;
-        private const double XLf = 548.0;
-        private const double XSfLf = 624.0;
-        private const double XArea = 690.0;
+        private const double XNum = 50.0;
+        private const double XMember = 58.0;
+        private const double XMemberWidth = 112.0;
+        private const double XType = 176.0;
+        private const double XTypeWidth = 80.0;
+        private const double XCoating = 262.0;
+        private const double XFire = 344.0;
+        private const double XFireWidth = 76.0;
+        private const double XCoats = 466.0;
+        private const double XLf = 540.0;
+        private const double XSfLf = 612.0;
+        private const double XArea = 684.0;
         private const double XWft = Right;      // blank fill-in column
-        private const double XWftLeft = 704.0;  // where the write-in underline starts
+        private const double XWftLeft = 706.0;  // where the write-in underline starts
 
         public static void Write(
             string path,
@@ -79,8 +81,10 @@ namespace SteelCoatingTakeoff.Core.Reporting
                 totalArea += area;
 
                 var index = rows.IndexOf(line) + 1;
+                var type = MemberClassification.ShortLabel(line.MemberType, line.Support);
                 pdf.TextRight(XNum, y, index.ToString(), BodySize, PdfFont.Mono, 0.45);
                 pdf.Text(XMember, y, ReportShared.Fit(ReportShared.MemberLabel(line), XMemberWidth, BodySize, PdfFont.Regular), BodySize);
+                pdf.Text(XType, y, ReportShared.Fit(type.Length == 0 ? "-" : type, XTypeWidth, BodySize, PdfFont.Regular), BodySize);
                 pdf.Text(XCoating, y, intumescent ? "Intumescent" : "Standard", BodySize, PdfFont.Regular,
                          intumescent ? 0.35 : 0.0);
                 pdf.Text(XFire, y, ReportShared.Fit(string.IsNullOrWhiteSpace(line.FireRating) ? "-" : line.FireRating.Trim(),
@@ -132,6 +136,7 @@ namespace SteelCoatingTakeoff.Core.Reporting
 
             pdf.Rect(Margin, y - 4.0, Right - Margin, 14.0, 0.92);
             pdf.Text(XMember, y, "Member", 8.5, PdfFont.Bold);
+            pdf.Text(XType, y, "Type", 8.5, PdfFont.Bold);
             pdf.Text(XCoating, y, "Coating", 8.5, PdfFont.Bold);
             pdf.Text(XFire, y, "Fire Rating", 8.5, PdfFont.Bold);
             pdf.TextRight(XCoats, y, "Coats", 8.5, PdfFont.MonoBold);

@@ -116,6 +116,21 @@ namespace SteelCoatingTakeoff.Core.Sage
         /// </summary>
         public string DefaultFireRating { get; set; } = "";
 
+        /// <summary>Member type pre-filled into each new member (Column/Beam/unspecified).</summary>
+        public MemberKind DefaultMemberType { get; set; } = MemberKind.Unspecified;
+
+        /// <summary>For a new COLUMN, the support pre-filled (Floor/Roof/unspecified).</summary>
+        public SupportKind DefaultSupport { get; set; } = SupportKind.Unspecified;
+
+        // ---- Projects -----------------------------------------------------
+
+        /// <summary>
+        /// Folder where saved takeoffs (projects) live. Blank means the per-user default
+        /// (%APPDATA%\SteelCoatingTakeoff\Projects), resolved by the app. Point it at a
+        /// network share so an estimating team sees the same projects.
+        /// </summary>
+        public string ProjectsDirectory { get; set; } = "";
+
         /// <summary>
         /// Which generated item carries the labor on the INTUMESCENT assembly, matched by
         /// a case-insensitive substring of the item description. Default "Insulation"

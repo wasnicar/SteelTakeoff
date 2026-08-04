@@ -40,6 +40,9 @@ Program Files is read-only for standard users, so the app writes settings **per 
 The `appsettings.json` installed beside the exe is only the **seed defaults**, read on first
 run. This is why "Save settings" works for a non-admin user.
 
+Saved takeoffs (projects) default to `%APPDATA%\SteelCoatingTakeoff\Projects`. Point them at
+a network share from the **Projects** panel so an estimating team shares one project list.
+
 ## Server requirements
 
 - **Windows x64** with **.NET Framework 4.8** (present on any machine running Sage Estimating)

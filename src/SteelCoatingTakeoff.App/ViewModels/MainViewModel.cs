@@ -13,6 +13,7 @@ using Microsoft.Win32;
 using SteelCoatingTakeoff.App.Sage;
 using SteelCoatingTakeoff.Core;
 using SteelCoatingTakeoff.Core.Model;
+using SteelCoatingTakeoff.Core.Projects;
 using SteelCoatingTakeoff.Core.Reporting;
 using SteelCoatingTakeoff.Core.Sage;
 
@@ -181,8 +182,10 @@ namespace SteelCoatingTakeoff.App.ViewModels
             LoadAssembliesCommand = new RelayCommand(async _ => await LoadAssembliesAsync(), _ => IsNotBusy);
             DetectCommand = new RelayCommand(async _ => await DetectAsync(), _ => IsNotBusy);
 
-            // Seed one row so the grid isn't empty on launch.
+            // Seed one row so the grid isn't empty on launch (not a user edit → not dirty).
+            _loading = true;
             AddRow(_db.GetFamily("W"));
+            _loading = false;
         }
 
         /// <summary>
@@ -313,10 +316,11 @@ namespace SteelCoatingTakeoff.App.ViewModels
         public TakeoffRowViewModel AddRow(ShapeFamily family = null)
         {
             var row = new TakeoffRowViewModel(Families, family ?? Families.FirstOrDefault(), Settings);
-            row.Changed += (_, __) => RecomputeTotals();
+            row.Changed += (_, __) => { RecomputeTotals(); MarkDirty(); };
             Rows.Add(row);
             SelectedRow = row;
             RecomputeTotals();
+            MarkDirty();
             return row;
         }
 
@@ -336,6 +340,7 @@ namespace SteelCoatingTakeoff.App.ViewModels
             foreach (var row in TargetRows()) Rows.Remove(row);
             SelectedRow = Rows.LastOrDefault();
             RecomputeTotals();
+            MarkDirty();
         }
 
         private void DuplicateRow()
@@ -357,6 +362,230 @@ namespace SteelCoatingTakeoff.App.ViewModels
         {
             Rows.Clear();
             RecomputeTotals();
+            MarkDirty();
+        }
+
+        // ==================== projects (save / open) ====================
+        //
+        // A saved takeoff is one JSON file (.sctk) in the projects folder. This lets an
+        // estimator save a takeoff, send the supplier report, then reopen it later and
+        // enter the WFT the supplier returned before sending to Sage. Costs are never
+        // stored — they are always recomputed from wage/productivity on load.
+
+        private string _currentProjectPath;
+        private bool _isDirty;
+        private bool _loading;
+
+        /// <summary>Display name of the open project, or "Untitled".</summary>
+        public string CurrentProjectName =>
+            string.IsNullOrEmpty(_currentProjectPath) ? "Untitled" : Path.GetFileNameWithoutExtension(_currentProjectPath);
+
+        public bool HasCurrentProject => !string.IsNullOrEmpty(_currentProjectPath);
+
+        /// <summary>True once the takeoff has unsaved edits.</summary>
+        public bool IsDirty
+        {
+            get => _isDirty;
+            private set { if (Set(ref _isDirty, value)) Raise(nameof(ProjectTitle)); }
+        }
+
+        /// <summary>Project name with a "*" while there are unsaved edits — shown in the header.</summary>
+        public string ProjectTitle => CurrentProjectName + (_isDirty ? " *" : "");
+
+        private void MarkDirty()
+        {
+            if (_loading) return;
+            IsDirty = true;
+        }
+
+        /// <summary>The projects folder: the configured path, or the per-user default.</summary>
+        public string EffectiveProjectsDir
+        {
+            get
+            {
+                if (!string.IsNullOrWhiteSpace(Settings.ProjectsDirectory)) return Settings.ProjectsDirectory.Trim();
+                return Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "SteelCoatingTakeoff", "Projects");
+            }
+        }
+
+        public IReadOnlyList<ProjectSummary> ListProjects() => ProjectStore.List(EffectiveProjectsDir);
+
+        public void NewProject()
+        {
+            _loading = true;
+            try
+            {
+                Rows.Clear();
+                AddRow(_db.GetFamily("W"));
+                _currentProjectPath = null;
+            }
+            finally { _loading = false; }
+
+            Raise(nameof(CurrentProjectName));
+            Raise(nameof(HasCurrentProject));
+            IsDirty = false;
+            RecomputeTotals();
+            Log("New takeoff.");
+        }
+
+        public bool OpenProject(string path, out string error)
+        {
+            error = null;
+            try
+            {
+                var project = ProjectStore.Load(path);
+                _loading = true;
+                try
+                {
+                    Rows.Clear();
+                    foreach (var dto in project.Lines ?? new List<SavedTakeoffLine>())
+                    {
+                        var line = ProjectMapper.ToLine(dto, _db);
+                        var row = new TakeoffRowViewModel(Families, line.Family ?? Families.FirstOrDefault(), Settings);
+                        row.Changed += (_, __) => { RecomputeTotals(); MarkDirty(); };
+                        row.LoadFrom(line);
+                        Rows.Add(row);
+                    }
+                    if (Rows.Count == 0) AddRow(_db.GetFamily("W"));
+                    if (!string.IsNullOrWhiteSpace(project.EstimateName)) Settings.EstimateName = project.EstimateName;
+                    _currentProjectPath = path;
+                }
+                finally { _loading = false; }
+
+                SelectedRow = Rows.FirstOrDefault();
+                Raise(nameof(CurrentProjectName));
+                Raise(nameof(HasCurrentProject));
+                IsDirty = false;
+                RecomputeTotals();
+                Log($"Opened '{CurrentProjectName}' ({Rows.Count} member(s)).");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                Log("Open failed: " + ex.Message);
+                return false;
+            }
+        }
+
+        public bool SaveProjectAs(string name, out string error)
+        {
+            error = null;
+            if (string.IsNullOrWhiteSpace(name)) { error = "Enter a project name."; return false; }
+            return SaveTo(ProjectStore.PathFor(EffectiveProjectsDir, name), name.Trim(), out error);
+        }
+
+        public bool SaveCurrent(out string error)
+        {
+            error = null;
+            if (!HasCurrentProject) { error = "unnamed"; return false; }  // caller falls back to Save As
+            return SaveTo(_currentProjectPath, Path.GetFileNameWithoutExtension(_currentProjectPath), out error);
+        }
+
+        private bool SaveTo(string path, string name, out string error)
+        {
+            error = null;
+            try
+            {
+                var now = DateTime.UtcNow.ToString("o");
+                var project = new TakeoffProject
+                {
+                    Name = name,
+                    EstimateName = Settings.EstimateName ?? "",
+                    CreatedUtc = now,
+                    ModifiedUtc = now,
+                    Lines = Rows.Where(r => r.SelectedShape != null)
+                                .Select(r => ProjectMapper.FromLine(r.ToLine())).ToList()
+                };
+                ProjectStore.Save(path, project);
+                _currentProjectPath = path;
+                Raise(nameof(CurrentProjectName));
+                Raise(nameof(HasCurrentProject));
+                IsDirty = false;
+                Log($"Saved '{name}'  →  {path}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                Log("Save failed: " + ex.Message);
+                return false;
+            }
+        }
+
+        public bool RenameProject(string path, string newName, out string error)
+        {
+            error = null;
+            if (string.IsNullOrWhiteSpace(newName)) { error = "Enter a name."; return false; }
+            try
+            {
+                var project = ProjectStore.Load(path);
+                project.Name = newName.Trim();
+                var newPath = ProjectStore.PathFor(EffectiveProjectsDir, newName);
+                ProjectStore.Save(newPath, project);
+                if (!string.Equals(newPath, path, StringComparison.OrdinalIgnoreCase))
+                    ProjectStore.Delete(path);
+                if (string.Equals(path, _currentProjectPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    _currentProjectPath = newPath;
+                    Raise(nameof(CurrentProjectName));
+                }
+                Log($"Renamed to '{newName.Trim()}'.");
+                return true;
+            }
+            catch (Exception ex) { error = ex.Message; Log("Rename failed: " + ex.Message); return false; }
+        }
+
+        public void DeleteProject(string path)
+        {
+            try
+            {
+                ProjectStore.Delete(path);
+                if (string.Equals(path, _currentProjectPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    _currentProjectPath = null;
+                    Raise(nameof(CurrentProjectName));
+                    Raise(nameof(HasCurrentProject));
+                }
+                Log("Deleted project.");
+            }
+            catch (Exception ex) { Log("Delete failed: " + ex.Message); }
+        }
+
+        // ---- member-classification defaults (toolbar combos) ----
+        public string[] MemberTypeOptions => TakeoffRowViewModel.MemberTypeOptions;
+        public string[] SupportOptions => TakeoffRowViewModel.SupportOptions;
+
+        public string DefaultMemberTypeText
+        {
+            get => MemberClassification.KindLabel(Settings.DefaultMemberType);
+            set
+            {
+                Settings.DefaultMemberType =
+                    string.Equals(value, "Column", StringComparison.OrdinalIgnoreCase) ? MemberKind.Column
+                  : string.Equals(value, "Beam", StringComparison.OrdinalIgnoreCase) ? MemberKind.Beam
+                  : MemberKind.Unspecified;
+                Raise(nameof(DefaultMemberTypeText));
+                Raise(nameof(IsDefaultColumn));
+                Raise(nameof(DefaultSupportText));
+            }
+        }
+
+        public bool IsDefaultColumn => Settings.DefaultMemberType == MemberKind.Column;
+
+        public string DefaultSupportText
+        {
+            get => MemberClassification.SupportLabel(Settings.DefaultMemberType, Settings.DefaultSupport);
+            set
+            {
+                Settings.DefaultSupport =
+                    string.Equals(value, "Floor", StringComparison.OrdinalIgnoreCase) ? SupportKind.Floor
+                  : string.Equals(value, "Roof", StringComparison.OrdinalIgnoreCase) ? SupportKind.Roof
+                  : SupportKind.Unspecified;
+                Raise(nameof(DefaultSupportText));
+            }
         }
 
         private void RecomputeTotals()

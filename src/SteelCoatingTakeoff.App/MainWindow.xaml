@@ -32,7 +32,7 @@
 
                 <!-- Footer -->
                 <TextBlock DockPanel.Dock="Bottom" Margin="6,10,0,0" FontSize="11" Foreground="{StaticResource Muted}"
-                           Text="v3.0 · Sage Estimating 25.2"/>
+                           Text="v3.1 · Sage Estimating 25.2"/>
 
                 <!-- Nav -->
                 <StackPanel DockPanel.Dock="Top">
@@ -45,8 +45,14 @@
                             </Border>
                         </StackPanel>
                     </Button>
-                    <!-- One entry: the connection window already covers databases,
-                         assemblies and settings, so separate nav items were redundant. -->
+                    <Button Style="{StaticResource NavButton}" Click="OpenProjects_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE8B7;" FontSize="15" Margin="0,0,11,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="Projects" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <!-- The connection window already covers databases, assemblies and
+                         settings, so separate nav items were redundant. -->
                     <Button Style="{StaticResource NavButton}" Click="OpenConnectionSettings_Click">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE713;" FontSize="15" Margin="0,0,11,0" VerticalAlignment="Center"/>
@@ -70,7 +76,12 @@
             <Border Grid.Row="0" Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
                 <Grid Margin="24,14">
                     <StackPanel VerticalAlignment="Center">
-                        <TextBlock Text="Takeoff" FontSize="20" FontWeight="Bold"/>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Takeoff" FontSize="20" FontWeight="Bold"/>
+                            <TextBlock Text="{Binding ProjectTitle}" FontSize="20" FontWeight="SemiBold"
+                                       Foreground="{StaticResource Muted}" Margin="10,0,0,0" VerticalAlignment="Center"
+                                       ToolTip="Open project. Manage projects from the Projects panel; Ctrl+S saves."/>
+                        </StackPanel>
                         <TextBlock Text="Contour SF/LF per AISC Design Guide 19 · routes coating area to Sage assemblies"
                                    FontSize="12" Foreground="{StaticResource Muted}"/>
                     </StackPanel>
@@ -105,12 +116,16 @@
                 </Grid>
             </Border>
 
-            <!-- Content -->
-            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="24,20,24,24">
-                <StackPanel>
+            <!-- Content: tiles fixed at top, takeoff area fills and scrolls internally
+                 (the grid no longer grows the whole page as members are added). -->
+            <Grid Grid.Row="1" Margin="24,20,24,24">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
 
                     <!-- Stat tiles -->
-                    <UniformGrid Rows="1" Columns="5" Margin="0,0,0,8">
+                    <UniformGrid Grid.Row="0" Rows="1" Columns="5" Margin="0,0,0,8">
                         <Border Style="{StaticResource Card}" Margin="0,0,10,12" Padding="16">
                             <StackPanel>
                                 <StackPanel Orientation="Horizontal">
@@ -165,7 +180,7 @@
                     </UniformGrid>
 
                     <!-- Grid + right rail -->
-                    <Grid>
+                    <Grid Grid.Row="1">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="352"/>
@@ -221,6 +236,17 @@
                                                  Style="{StaticResource InlineField}" TextAlignment="Left"
                                                  ToolTip="Fire rating pre-filled into new members, e.g. &quot;2 hr&quot;. Informational — for the supplier report and the Sage assembly description."/>
 
+                                        <TextBlock Text="Type" Style="{StaticResource InlineFieldLabel}"/>
+                                        <ComboBox Width="72" Margin="0,0,14,0" VerticalContentAlignment="Center"
+                                                  ItemsSource="{Binding MemberTypeOptions}"
+                                                  SelectedItem="{Binding DefaultMemberTypeText, UpdateSourceTrigger=PropertyChanged}"
+                                                  ToolTip="Column/Beam pre-filled into new members."/>
+                                        <ComboBox Width="66" Margin="0,0,14,0" VerticalContentAlignment="Center"
+                                                  ItemsSource="{Binding SupportOptions}"
+                                                  SelectedItem="{Binding DefaultSupportText, UpdateSourceTrigger=PropertyChanged}"
+                                                  IsEnabled="{Binding IsDefaultColumn}"
+                                                  ToolTip="For a column default, Floor or Roof."/>
+
                                         <TextBlock Text="Wage $/hr" Style="{StaticResource InlineFieldLabel}"/>
                                         <TextBox Text="{Binding Settings.WageRate, StringFormat={}{0:0.##}}"
                                                  Style="{StaticResource InlineField}"/>
@@ -257,7 +283,12 @@
                                           RowHeight="44" Background="Transparent" BorderThickness="0"
                                           HorizontalGridLinesBrush="{StaticResource Line}"
                                           SelectionMode="Extended" SelectionUnit="FullRow"
-                                          CanUserResizeRows="False">
+                                          CanUserResizeRows="False"
+                                          MaxColumnWidth="400"
+                                          VerticalScrollBarVisibility="Auto"
+                                          HorizontalScrollBarVisibility="Disabled"
+                                          EnableRowVirtualization="True"
+                                          ScrollViewer.CanContentScroll="True">
 
                                     <DataGrid.Style>
                                         <Style TargetType="DataGrid">
@@ -354,6 +385,27 @@
                                                 <DataTemplate>
                                                     <TextBox Text="{Binding LinearFeet, UpdateSourceTrigger=PropertyChanged, StringFormat={}{0:0.##}}"
                                                              TextAlignment="Right" Margin="6,4"/>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+
+                                        <!-- Type (Column/Beam) + Support (Floor/Roof). Support only
+                                             enables for a column. IsReadOnly keeps the combos live
+                                             on a single click instead of entering cell-edit first. -->
+                                        <DataGridTemplateColumn Header="Type" Width="1.4*" IsReadOnly="True">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Orientation="Horizontal" Margin="6,4" VerticalAlignment="Center">
+                                                        <ComboBox Width="66" VerticalContentAlignment="Center"
+                                                                  ItemsSource="{Binding DataContext.MemberTypeOptions, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                  SelectedItem="{Binding MemberTypeText, UpdateSourceTrigger=PropertyChanged}"
+                                                                  ToolTip="Column or beam. Informational — shown on reports and in Sage."/>
+                                                        <ComboBox Width="60" Margin="5,0,0,0" VerticalContentAlignment="Center"
+                                                                  ItemsSource="{Binding DataContext.SupportOptions, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                  SelectedItem="{Binding SupportText, UpdateSourceTrigger=PropertyChanged}"
+                                                                  IsEnabled="{Binding IsColumn}"
+                                                                  ToolTip="For a column, whether it supports a floor or a roof."/>
+                                                    </StackPanel>
                                                 </DataTemplate>
                                             </DataGridTemplateColumn.CellTemplate>
                                         </DataGridTemplateColumn>
@@ -460,8 +512,10 @@
                             </DockPanel>
                         </Border>
 
-                        <!-- Right rail -->
-                        <StackPanel Grid.Column="1">
+                        <!-- Right rail: its own scroller so a tall Labor + Activity stack
+                             scrolls independently of the takeoff grid. -->
+                        <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
 
                             <!-- Labor & Sage -->
                             <Border Style="{StaticResource Card}">
@@ -662,9 +716,9 @@
                                 </DockPanel>
                             </Border>
                         </StackPanel>
+                        </ScrollViewer>
                     </Grid>
-                </StackPanel>
-            </ScrollViewer>
+            </Grid>
         </Grid>
     </Grid>
 </Window>

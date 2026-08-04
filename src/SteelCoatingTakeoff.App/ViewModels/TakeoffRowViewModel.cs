@@ -30,7 +30,13 @@ namespace SteelCoatingTakeoff.App.ViewModels
         private double _wftMils;
         private int _coats = 1;
         private string _fireRating = "";
+        private MemberKind _memberType = MemberKind.Unspecified;
+        private SupportKind _support = SupportKind.Unspecified;
         private bool _isSelected;
+
+        /// <summary>Combo choices (blank = unspecified).</summary>
+        public static readonly string[] MemberTypeOptions = { "", "Column", "Beam" };
+        public static readonly string[] SupportOptions = { "", "Floor", "Roof" };
         private double _wageRate;
         private double _productivity;
         private double _laborProductivityFactor = 1.0;
@@ -45,6 +51,10 @@ namespace SteelCoatingTakeoff.App.ViewModels
             _wftMils = settings?.DefaultWftMils ?? 0;
             _coats = settings?.DefaultCoats > 0 ? settings.DefaultCoats : 1;
             _fireRating = settings?.DefaultFireRating ?? "";
+            _memberType = settings?.DefaultMemberType ?? MemberKind.Unspecified;
+            _support = _memberType == MemberKind.Column
+                ? (settings?.DefaultSupport ?? SupportKind.Unspecified)
+                : SupportKind.Unspecified;
 
             // Labor is per member; the settings supply the starting values for a new one.
             _wageRate = settings?.WageRate ?? 0.0;
@@ -161,6 +171,48 @@ namespace SteelCoatingTakeoff.App.ViewModels
             set { if (Set(ref _fireRating, value)) Changed?.Invoke(this, EventArgs.Empty); }
         }
 
+        /// <summary>Column / Beam / blank, bound to the grid combo as text.</summary>
+        public string MemberTypeText
+        {
+            get => MemberClassification.KindLabel(_memberType);
+            set
+            {
+                var kind = string.Equals(value, "Column", StringComparison.OrdinalIgnoreCase) ? MemberKind.Column
+                         : string.Equals(value, "Beam", StringComparison.OrdinalIgnoreCase) ? MemberKind.Beam
+                         : MemberKind.Unspecified;
+                if (_memberType == kind) return;
+                _memberType = kind;
+                // Support only applies to a column; drop it otherwise so it can't linger.
+                if (_memberType != MemberKind.Column) _support = SupportKind.Unspecified;
+                Raise(nameof(MemberTypeText));
+                Raise(nameof(IsColumn));
+                Raise(nameof(SupportText));
+                Changed?.Invoke(this, EventArgs.Empty);
+            }
+        }
+
+        /// <summary>True when this member is a column — enables the Floor/Roof combo.</summary>
+        public bool IsColumn => _memberType == MemberKind.Column;
+
+        /// <summary>Floor / Roof / blank for a column, bound to the grid combo as text.</summary>
+        public string SupportText
+        {
+            get => MemberClassification.SupportLabel(_memberType, _support);
+            set
+            {
+                var support = string.Equals(value, "Floor", StringComparison.OrdinalIgnoreCase) ? SupportKind.Floor
+                            : string.Equals(value, "Roof", StringComparison.OrdinalIgnoreCase) ? SupportKind.Roof
+                            : SupportKind.Unspecified;
+                if (_support == support) return;
+                _support = support;
+                Raise(nameof(SupportText));
+                Changed?.Invoke(this, EventArgs.Empty);
+            }
+        }
+
+        public MemberKind MemberType => _memberType;
+        public SupportKind Support => _support;
+
         public bool IsPlate => SelectedFamily != null && SelectedFamily.IsPlate;
         public string CoatingLabel => IsIntumescent ? "Intumescent" : "Standard";
 
@@ -188,6 +240,8 @@ namespace SteelCoatingTakeoff.App.ViewModels
             WftMils = WftMils,
             Coats = Coats,
             FireRating = FireRating,
+            MemberType = _memberType,
+            Support = _support,
             WageRate = WageRate,
             Productivity = Productivity,
             LaborProductivityFactor = LaborProductivityFactor
@@ -210,6 +264,36 @@ namespace SteelCoatingTakeoff.App.ViewModels
             Raise(nameof(LaborPricePerSquareFoot));
             Raise(nameof(CalculationSteps));
             Changed?.Invoke(this, EventArgs.Empty);
+        }
+
+        /// <summary>
+        /// Repopulate this row from a saved/loaded line. Family is set first so the size
+        /// list rebuilds, then the exact shape is restored on top.
+        /// </summary>
+        public void LoadFrom(TakeoffLine line)
+        {
+            if (line.Family != null) SelectedFamily = line.Family;
+            if (line.Shape != null) SelectedShape = line.Shape;
+            PlateWidthInches = line.PlateWidthInches;
+            LinearFeet = line.LinearFeet;
+            IsIntumescent = line.Coating == CoatingType.Intumescent;
+            WftMils = line.WftMils;
+            Coats = line.Coats;
+            _fireRating = line.FireRating ?? "";
+            _memberType = line.MemberType;
+            _support = line.MemberType == MemberKind.Column ? line.Support : SupportKind.Unspecified;
+            _wageRate = line.WageRate;
+            _productivity = line.Productivity;
+            _laborProductivityFactor = line.LaborProductivityFactor <= 0 ? 1.0 : line.LaborProductivityFactor;
+
+            Raise(nameof(FireRating));
+            Raise(nameof(MemberTypeText));
+            Raise(nameof(SupportText));
+            Raise(nameof(IsColumn));
+            Raise(nameof(WageRate));
+            Raise(nameof(Productivity));
+            Raise(nameof(LaborProductivityFactor));
+            NotifyComputed();
         }
 
         /// <summary>

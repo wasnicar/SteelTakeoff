@@ -39,6 +39,18 @@ namespace SteelCoatingTakeoff.Core.Model
         /// </summary>
         public string FireRating { get; set; } = "";
 
+        /// <summary>
+        /// Whether this member is a column or a beam. Informational only (supplier report,
+        /// cost report, Sage description); no effect on area or labor.
+        /// </summary>
+        public MemberKind MemberType { get; set; } = MemberKind.Unspecified;
+
+        /// <summary>
+        /// For a COLUMN, whether it supports a floor or a roof. Meaningless for a beam and
+        /// ignored there. Informational only.
+        /// </summary>
+        public SupportKind Support { get; set; } = SupportKind.Unspecified;
+
         // ---- Labor, per member -------------------------------------------
         // Wage and productivity are carried by the LINE, not by settings: two members
         // in the same takeoff can be priced by different crews, and intumescent work

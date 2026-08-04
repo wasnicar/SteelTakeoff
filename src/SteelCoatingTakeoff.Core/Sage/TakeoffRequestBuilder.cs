@@ -45,29 +45,37 @@ namespace SteelCoatingTakeoff.Core.Sage
             // The dollar total is the same either way (area × wage/effective-productivity);
             // only the field it lands in differs. Coats is not part of the rate — it is
             // already in the area quantity.
-            var pricePerSf = TakeoffCalculator.LaborPricePerSquareFoot(line, settings.WftLaborDivisor);
-            if (pricePerSf > 0)
+            // Gate on wage + productivity (both mechanisms need them). For intumescent the
+            // paint line's $/SF additionally needs a WFT; if that is missing pricePerSf is 0
+            // and only the paint line is left unpriced — the base-coat items still get
+            // wage+productivity.
+            if (line.WageRate > 0 && line.Productivity > 0)
             {
                 var effective = TakeoffCalculator.EffectiveProductivity(line, settings.WftLaborDivisor);
+                var pricePerSf = TakeoffCalculator.LaborPricePerSquareFoot(line, settings.WftLaborDivisor);
+
                 req.AppliesLabor = true;
                 req.LaborItemMatch = settings.LaborItemMatchFor(line.Coating);
                 req.EffectiveProductivity = effective;
                 req.LaborProductivityFactor = line.LaborProductivityFactor;
+                req.LaborWageRate = TakeoffCalculator.RoundQty(line.WageRate, 4);
+                req.LaborProductivity = TakeoffCalculator.RoundQty(line.Productivity, 4);
                 req.LaborUnitPrice = TakeoffCalculator.RoundQty(pricePerSf, 4);
 
                 if (line.Coating == CoatingType.Intumescent)
                 {
+                    // Split: the paint line (LaborItemMatch) gets the WFT $/SF; every OTHER
+                    // item in the assembly gets the wage + productivity from takeoff.
+                    req.SplitIntumescentLabor = true;
                     req.LaborAsProductivity = false;
                     req.LaborBasis =
-                        $"${line.WageRate:0.00}/hr ÷ {effective:0.##} SF/hr "
-                        + $"({line.Productivity:0.##} ÷ WFT {line.WftMils:0.##}/{settings.WftLaborDivisor:0.##})"
-                        + $" = ${req.LaborUnitPrice:0.####}/SF";
+                        $"paint ${req.LaborUnitPrice:0.####}/SF (WFT {line.WftMils:0.##}/{settings.WftLaborDivisor:0.##}"
+                        + $" × ${line.WageRate:0.00}/hr ÷ {line.Productivity:0.##} SF/hr); "
+                        + $"other items ${line.WageRate:0.00}/hr ÷ {line.Productivity:0.##} SF/hr";
                 }
                 else
                 {
                     req.LaborAsProductivity = true;
-                    req.LaborWageRate = TakeoffCalculator.RoundQty(line.WageRate, 4);
-                    req.LaborProductivity = TakeoffCalculator.RoundQty(line.Productivity, 4);
                     req.LaborBasis =
                         $"L.Price ${line.WageRate:0.00}/hr, L.Prod {line.Productivity:0.##} SF/hr → Sage computes ${req.LaborUnitPrice:0.####}/SF";
                 }

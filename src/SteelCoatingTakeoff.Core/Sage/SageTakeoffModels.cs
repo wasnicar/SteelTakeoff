@@ -89,11 +89,19 @@ namespace SteelCoatingTakeoff.Core.Sage
         /// <summary>Labor price per SF → item labor UnitPrice (intumescent). Sage Amount = qty × this.</summary>
         public double LaborUnitPrice { get; set; }
 
-        /// <summary>Hourly wage → L.Price (standard lines, when <see cref="LaborAsProductivity"/>).</summary>
+        /// <summary>Hourly wage → L.Price (standard lines, and the intumescent split's base coats).</summary>
         public double LaborWageRate { get; set; }
 
-        /// <summary>Productivity (SF/hr) → L.Prod (standard lines, when <see cref="LaborAsProductivity"/>).</summary>
+        /// <summary>Productivity (SF/hr) → L.Prod (standard lines, and the intumescent split's base coats).</summary>
         public double LaborProductivity { get; set; }
+
+        /// <summary>
+        /// Intumescent only. When true the connector SPLITS labor across the assembly's
+        /// items: the paint line (matched by <see cref="LaborItemMatch"/>) gets the WFT
+        /// <see cref="LaborUnitPrice"/> as a fixed $/SF, while every OTHER item gets the
+        /// wage (<see cref="LaborWageRate"/>) and productivity (<see cref="LaborProductivity"/>).
+        /// </summary>
+        public bool SplitIntumescentLabor { get; set; }
 
         /// <summary>
         /// Productivity factor → item labor ProductivityFactor (Sage's L.Prod Factor).

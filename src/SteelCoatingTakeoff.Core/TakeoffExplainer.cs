@@ -152,7 +152,9 @@ namespace SteelCoatingTakeoff.Core
                 steps.Add(line.Coating == CoatingType.Intumescent
                     ? new CalculationStep(
                         "Sent to Sage",
-                        $"${pricePerSf:0.####}/SF written as the labor UnitPrice — a fixed price per square foot.")
+                        $"Intumescent paint line: ${pricePerSf:0.####}/SF as the labor UnitPrice. Every other item " +
+                        $"in the assembly: L.Price ${line.WageRate:0.00}/hr and L.Prod {Num(line.Productivity)} SF/hr, " +
+                        "so Sage prices the base coats too. (The Labor total above is the paint line only.)")
                     : new CalculationStep(
                         "Sent to Sage",
                         $"L.Price ${line.WageRate:0.00}/hr and L.Prod {Num(line.Productivity)} SF/hr (labor ordered in " +

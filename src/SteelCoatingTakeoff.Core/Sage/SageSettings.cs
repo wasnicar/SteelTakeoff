@@ -132,9 +132,12 @@ namespace SteelCoatingTakeoff.Core.Sage
         public string ProjectsDirectory { get; set; } = "";
 
         /// <summary>
-        /// Which generated item carries the labor on the INTUMESCENT assembly, matched by
-        /// a case-insensitive substring of the item description. Default "Insulation"
-        /// targets the film line ("Generic Insulation Coat 1").
+        /// Identifies the intumescent PAINT line — the item that gets the WFT-based $/SF —
+        /// matched by a case-insensitive substring of the item description. Default
+        /// "Insulation" targets the film line ("Generic Insulation Coat 1"). Every OTHER
+        /// item in the intumescent assembly instead receives the wage + productivity from
+        /// takeoff. Change this if the paint line is named differently (e.g. "Intumescent
+        /// Paint").
         /// </summary>
         public string IntumescentLaborItemMatch { get; set; } = "Insulation";
 

@@ -5,8 +5,13 @@ admin rights on the target machine.
 
 | File | Installs to | Admin needed |
 |---|---|---|
-| `dist\SteelCoatingTakeoffSetup.exe` | `C:\Program Files\Steel Coating Takeoff\` | **Yes** (UAC prompt) |
-| `dist\SteelCoatingTakeoffSetup-NoAdmin.exe` | `%LOCALAPPDATA%\Programs\Steel Coating Takeoff\` | **No** |
+| `dist\SteelCoatingTakeoffSetup-<version>.exe` | `C:\Program Files\Steel Coating Takeoff\` | **Yes** (UAC prompt) |
+| `dist\SteelCoatingTakeoffSetup-NoAdmin-<version>.exe` | `%LOCALAPPDATA%\Programs\Steel Coating Takeoff\` | **No** |
+
+The version is appended to the file name (e.g. `SteelCoatingTakeoffSetup-3.2.0.exe`) and is
+also stamped into the setup exe's version resource, so it shows in **Properties → Details**
+(*File description*, *File version*, *Product version*). Each build is self-identifying, and
+older versions in `dist\` stay side by side rather than being overwritten.
 
 Both bundle the Sage SDK, register an uninstaller in Add/Remove Programs (per-machine vs
 per-user hive), and create Start Menu + optional Desktop shortcuts. They carry different
@@ -26,7 +31,7 @@ the setup .exe locked against deletion.)
 - Creates a **Start Menu** group (app + uninstall) and an optional **Desktop** shortcut
 - Registers in **Add/Remove Programs** ("Steel Coating Takeoff", publisher Asnicar &
   Associates) with a working uninstaller
-- Silent install supported: `SteelCoatingTakeoffSetup.exe /VERYSILENT /NORESTART`
+- Silent install supported: `SteelCoatingTakeoffSetup-<version>.exe /VERYSILENT /NORESTART`
   (same switches work for the `-NoAdmin` build)
 
 ## Where settings live

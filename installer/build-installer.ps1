@@ -22,7 +22,10 @@ $rel   = Join-Path $RepoRoot "src\SteelCoatingTakeoff.App\bin\Release\net48"
 $dist  = Join-Path $RepoRoot "dist"
 $stage = Join-Path $dist "stage\SteelCoatingTakeoff"
 $iss   = Join-Path $PSScriptRoot "SteelCoatingTakeoff.iss"
-$target= Join-Path $dist "SteelCoatingTakeoffSetup.exe"
+# The version is appended to the file name (and stamped into the exe's File
+# description) so each build is self-identifying — must match OutputBaseFilename
+# in the .iss.
+$target= Join-Path $dist "SteelCoatingTakeoffSetup-$AppVersion.exe"
 
 # Locate the Inno Setup compiler (winget installs per-user by default).
 $iscc = @(
@@ -45,7 +48,7 @@ foreach ($f in "SteelCoatingTakeoff.exe","SteelCoatingTakeoff.exe.config","Steel
 Copy-Item (Join-Path $SdkDir "*") (Join-Path $stage "Sdk") -Recurse -Force
 
 Write-Host "3/4  Compiling installers (Inno Setup)..."
-$targetUser = Join-Path $dist "SteelCoatingTakeoffSetup-NoAdmin.exe"
+$targetUser = Join-Path $dist "SteelCoatingTakeoffSetup-NoAdmin-$AppVersion.exe"
 foreach ($t in @($target, $targetUser)) { if (Test-Path $t) { Remove-Item $t -Force } }
 
 # a) admin build -> Program Files

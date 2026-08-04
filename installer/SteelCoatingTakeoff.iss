@@ -27,14 +27,18 @@
 #ifdef PerUser
 AppId={{C7A4E913-25D8-4F60-B1A7-6E9D48C3502F}
 DefaultDirName={localappdata}\Programs\{#AppName}
-OutputBaseFilename=SteelCoatingTakeoffSetup-NoAdmin
+; The version is appended so each build is self-identifying by name AND by the
+; setup exe's File description (VersionInfoDescription below).
+OutputBaseFilename=SteelCoatingTakeoffSetup-NoAdmin-{#AppVersion}
+VersionInfoDescription={#AppName} Setup (per-user) {#AppVersion}
 ; No elevation: installs for the current user only, no UAC prompt, no admin rights.
 PrivilegesRequired=lowest
 UninstallDisplayName={#AppName} (per-user)
 #else
 AppId={{8E1C2F4A-7B93-4D62-9E4B-2C5A7D3F1B08}
 DefaultDirName={autopf}\{#AppName}
-OutputBaseFilename=SteelCoatingTakeoffSetup
+OutputBaseFilename=SteelCoatingTakeoffSetup-{#AppVersion}
+VersionInfoDescription={#AppName} Setup {#AppVersion}
 ; Program Files needs admin; this also puts the UAC shield on the setup exe.
 PrivilegesRequired=admin
 UninstallDisplayName={#AppName}
@@ -46,6 +50,12 @@ AppPublisher={#AppPublisher}
 DefaultGroupName={#AppName}
 UninstallDisplayIcon={app}\{#AppExeName}
 OutputDir={#OutDir}
+; Stamp the setup exe's version resource so the version shows in File properties
+; -> Details (File description, File/Product version) as well as the file name.
+VersionInfoVersion={#AppVersion}
+VersionInfoProductVersion={#AppVersion}
+VersionInfoProductName={#AppName}
+VersionInfoCompany={#AppPublisher}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern

@@ -435,6 +435,23 @@ namespace SteelCoatingTakeoff.CoreTests
             Check("assembly label folds in class + fire rating",
                 colReq.AssemblyLabel() == "W12 × 26 · Column/Roof · FR 2 hr", colReq.AssemblyLabel());
 
+            Console.WriteLine("\nAssembly description numbering (takeoff order in Sage):");
+            Check("numbered description = seq · label — base",
+                colReq.AssemblyDescription(3, "Intumescent Coating", true)
+                    == "003 · W12 × 26 · Column/Roof · FR 2 hr — Intumescent Coating",
+                colReq.AssemblyDescription(3, "Intumescent Coating", true));
+            Check("un-numbered description omits the prefix",
+                colReq.AssemblyDescription(3, "Intumescent Coating", false)
+                    == "W12 × 26 · Column/Roof · FR 2 hr — Intumescent Coating");
+            Check("number pads to 3 digits and sorts stably",
+                string.CompareOrdinal(
+                    colReq.AssemblyDescription(2, "X", true),
+                    colReq.AssemblyDescription(10, "X", true)) < 0);   // "002 …" < "010 …"
+            Check("no member label → number + base only",
+                new SageTakeoffRequest().AssemblyDescription(5, "Base", true) == "005 — Base");
+            Check("no base → number + label only",
+                colReq.AssemblyDescription(1, "", true) == "001 · W12 × 26 · Column/Roof · FR 2 hr");
+
             Console.WriteLine("\nProject save/load round-trip:");
             var projDir = Path.Combine(Path.GetTempPath(), "sctk-proj-" + Guid.NewGuid().ToString("N"));
             try

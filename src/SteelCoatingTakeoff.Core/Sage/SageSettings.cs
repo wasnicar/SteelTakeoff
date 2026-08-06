@@ -45,6 +45,14 @@ namespace SteelCoatingTakeoff.Core.Sage
         /// <summary>Assembly that consumes standard coating area (Intumescent = NO).</summary>
         public string StandardAssembly { get; set; } = "3000.310.02";
 
+        /// <summary>
+        /// Prefix each generated assembly's description with a zero-padded takeoff number
+        /// ("001 · …") so Sage's Assembly sort sequence shows members in the exact order
+        /// they were taken off. Numbers continue from the estimate's current highest, so a
+        /// second send keeps counting rather than restarting. Default on.
+        /// </summary>
+        public bool NumberGeneratedAssemblies { get; set; } = true;
+
         // ---- Labor ---------------------------------------------------------
         // Labor is priced from two typed inputs on the takeoff screen:
         //

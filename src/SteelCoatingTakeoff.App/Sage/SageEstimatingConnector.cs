@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using SteelCoatingTakeoff.Core.Sage;
 
 #if SAGE_SDK
@@ -51,6 +52,9 @@ namespace SteelCoatingTakeoff.App.Sage
         /// only way to get the UnitEntity is off the estimate's own unit list.
         /// </summary>
         private UnitEntity _hourUnit;
+
+        /// <summary>Next takeoff number to stamp onto an assembly description; continues past what's in the estimate.</summary>
+        private int _seqNext = 1;
 
         public SageConnectResult Connect(SageSettings settings)
         {
@@ -326,8 +330,11 @@ namespace SteelCoatingTakeoff.App.Sage
                 using (estimateService.LockEstimateTemporarily())
                 using (var cache = new TakeoffSessionCache(_estimate, _standardDB))
                 {
-                    // Needed to order standard labor lines in hours. Read once for the batch.
-                    _hourUnit = ReadHourUnit(estimateService);
+                    // One read of the estimate serves the batch: the hour unit (for labor)
+                    // and the next takeoff number (continuing past any already in the estimate).
+                    var existing = TryReadEntities(estimateService);
+                    _hourUnit = FindHourUnit(existing);
+                    _seqNext = NextTakeoffNumber(existing);
 
                     foreach (var req in pending)
                     {
@@ -437,17 +444,14 @@ namespace SteelCoatingTakeoff.App.Sage
                 if (req.AppliesLabor)
                     ApplyLabor(req, items, result);
 
-                // Each member is its own assembly takeoff, so it can carry its own
-                // description — stamp the steel type/size (and fire rating) onto it.
-                var memberLabel = req.AssemblyLabel();
-                if (!string.IsNullOrWhiteSpace(memberLabel))
-                {
-                    var estimateAssembly = session.Assembly;
-                    var baseDescription = assembly.Description;
-                    estimateAssembly.Description = string.IsNullOrWhiteSpace(baseDescription)
-                        ? memberLabel
-                        : $"{memberLabel} — {baseDescription}";
-                }
+                // Each member is its own assembly takeoff, so it carries its own
+                // description — the steel type/size, fire rating, and a takeoff number so
+                // Sage's Assembly sort sequence follows the order taken off.
+                var seq = _settings.NumberGeneratedAssemblies ? _seqNext++ : 0;
+                var description = req.AssemblyDescription(
+                    seq, assembly.Description, _settings.NumberGeneratedAssemblies);
+                if (!string.IsNullOrWhiteSpace(description))
+                    session.Assembly.Description = description;
 
                 session.CommitEntitiesToCache();
 
@@ -574,22 +578,42 @@ namespace SteelCoatingTakeoff.App.Sage
         }
 
         /// <summary>
-        /// The estimate's hour unit, for ordering standard labor lines in hours. There is
-        /// no lighter unit-read on the SDK, so this reads the estimate's entities; the unit
-        /// list is small and static, and the result is cached for the batch.
+        /// Read the estimate's entities once for the batch. There is no lighter read on the
+        /// SDK for the unit list, and the same read also yields the existing assemblies used
+        /// to continue the takeoff numbering. Null on failure (callers degrade gracefully).
         /// </summary>
-        private static UnitEntity ReadHourUnit(EstimateService estimateService)
+        private static EstimateEntities TryReadEntities(EstimateService estimateService)
         {
-            try
+            try { return estimateService.ReadEntities(); }
+            catch { return null; }
+        }
+
+        /// <summary>The estimate's hour unit, for ordering standard labor lines in hours.</summary>
+        private static UnitEntity FindHourUnit(EstimateEntities ents)
+        {
+            var units = ents?.Units;
+            if (units == null) return null;   // ApplyLabor falls back to a fixed $/SF and logs it.
+            return units.FirstOrDefault(u => string.Equals(u.Name, "hr", StringComparison.OrdinalIgnoreCase))
+                ?? units.FirstOrDefault(u => string.Equals(u.Name, "hour", StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        /// The next takeoff number: one past the highest leading number already on an
+        /// assembly description in the estimate, so a later send keeps counting rather than
+        /// restarting at 1. Starts at 1 for a fresh estimate.
+        /// </summary>
+        private static int NextTakeoffNumber(EstimateEntities ents)
+        {
+            var max = 0;
+            if (ents?.Assemblies != null)
             {
-                var units = estimateService.ReadEntities().Units;
-                return units.FirstOrDefault(u => string.Equals(u.Name, "hr", StringComparison.OrdinalIgnoreCase))
-                    ?? units.FirstOrDefault(u => string.Equals(u.Name, "hour", StringComparison.OrdinalIgnoreCase));
+                foreach (var a in ents.Assemblies)
+                {
+                    var m = Regex.Match(a.Description ?? string.Empty, @"^\s*(\d+)");
+                    if (m.Success && int.TryParse(m.Groups[1].Value, out var n) && n > max) max = n;
+                }
             }
-            catch
-            {
-                return null;   // ApplyLabor falls back to a fixed $/SF and logs it.
-            }
+            return max + 1;
         }
 
         private StandardDBAssemblyEntity ReadAssembly(string assemblyId)

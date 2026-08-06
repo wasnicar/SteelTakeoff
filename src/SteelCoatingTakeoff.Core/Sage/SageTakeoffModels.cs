@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using SteelCoatingTakeoff.Core.Model;
 
 namespace SteelCoatingTakeoff.Core.Sage
@@ -59,6 +60,25 @@ namespace SteelCoatingTakeoff.Core.Sage
             if (!string.IsNullOrWhiteSpace(MemberClass)) parts.Add(MemberClass.Trim());
             if (!string.IsNullOrWhiteSpace(FireRating)) parts.Add("FR " + FireRating.Trim());
             return string.Join(" · ", parts);
+        }
+
+        /// <summary>
+        /// The full description to stamp on the estimate assembly:
+        /// "001 · &lt;member label&gt; — &lt;base assembly description&gt;", omitting any empty part.
+        /// The zero-padded takeoff <paramref name="sequence"/> (when <paramref name="number"/>
+        /// is true) makes Sage's Assembly sort sequence follow takeoff order. Composed here,
+        /// not in the connector, so it is unit-testable without the SDK.
+        /// </summary>
+        public string AssemblyDescription(int sequence, string baseDescription, bool number)
+        {
+            var label = AssemblyLabel();
+            if (number)
+            {
+                var prefix = sequence.ToString("000", CultureInfo.InvariantCulture);
+                label = string.IsNullOrWhiteSpace(label) ? prefix : prefix + " · " + label;
+            }
+            if (string.IsNullOrWhiteSpace(label)) return baseDescription ?? string.Empty;
+            return string.IsNullOrWhiteSpace(baseDescription) ? label : label + " — " + baseDescription;
         }
 
         // ---- Labor (set when a wage + productivity are configured) ----------

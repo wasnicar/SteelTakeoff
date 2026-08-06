@@ -32,7 +32,7 @@
 
                 <!-- Footer -->
                 <TextBlock DockPanel.Dock="Bottom" Margin="6,10,0,0" FontSize="11" Foreground="{StaticResource Muted}"
-                           Text="v3.2 · Sage Estimating 25.2"/>
+                           Text="v3.3 · Sage Estimating 25.2"/>
 
                 <!-- Nav -->
                 <StackPanel DockPanel.Dock="Top">

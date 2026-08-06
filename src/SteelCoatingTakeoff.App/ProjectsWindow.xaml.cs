@@ -1,4 +1,6 @@
+using System;
 using System.Windows;
+using Microsoft.Win32;
 using SteelCoatingTakeoff.App.ViewModels;
 using SteelCoatingTakeoff.Core.Projects;
 
@@ -96,6 +98,64 @@ namespace SteelCoatingTakeoff.App
             _vm.NewProject();
             NameBox.Text = "";
             Close();
+        }
+
+        private void Backup_Click(object sender, RoutedEventArgs e)
+        {
+            if (_vm == null) return;
+            var dlg = new SaveFileDialog
+            {
+                FileName = "SteelCoatingTakeoff-Projects-" + DateTime.Now.ToString("yyyyMMdd") + ".zip",
+                Filter = "Backup zip (*.zip)|*.zip",
+                DefaultExt = ".zip"
+            };
+            if (dlg.ShowDialog() != true) return;
+            try
+            {
+                var n = _vm.BackupProjects(dlg.FileName);
+                MessageBox.Show(this, $"Backed up {n} project(s) to:\n\n{dlg.FileName}",
+                    "Back up projects", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "Backup failed:\n\n" + ex.Message, "Back up projects",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        private void Restore_Click(object sender, RoutedEventArgs e)
+        {
+            if (_vm == null) return;
+            var dlg = new OpenFileDialog { Filter = "Backup zip (*.zip)|*.zip", CheckFileExists = true };
+            if (dlg.ShowDialog() != true) return;
+
+            int inBackup;
+            try { inBackup = ProjectBackup.Count(dlg.FileName); }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "Could not read the backup:\n\n" + ex.Message, "Restore projects",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            if (MessageBox.Show(this,
+                    $"Restore {inBackup} project(s) into your projects folder?\n\n" +
+                    "Any project with the same name will be replaced.",
+                    "Restore projects", MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK)
+                return;
+
+            try
+            {
+                var n = _vm.RestoreProjects(dlg.FileName);
+                Refresh();
+                MessageBox.Show(this, $"Restored {n} project(s).", "Restore projects",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "Restore failed:\n\n" + ex.Message, "Restore projects",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
 
         private void Close_Click(object sender, RoutedEventArgs e) => Close();

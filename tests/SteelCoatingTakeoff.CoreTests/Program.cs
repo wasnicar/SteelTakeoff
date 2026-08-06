@@ -486,6 +486,45 @@ namespace SteelCoatingTakeoff.CoreTests
             }
             finally { if (Directory.Exists(projDir)) Directory.Delete(projDir, true); }
 
+            Console.WriteLine("\nProject backup / restore (zip round-trip):");
+            var srcDir = Path.Combine(Path.GetTempPath(), "sctk-bk-src-" + Guid.NewGuid().ToString("N"));
+            var dstDir = Path.Combine(Path.GetTempPath(), "sctk-bk-dst-" + Guid.NewGuid().ToString("N"));
+            var zipPath = Path.Combine(Path.GetTempPath(), "sctk-bk-" + Guid.NewGuid().ToString("N") + ".zip");
+            try
+            {
+                ProjectStore.Save(ProjectStore.PathFor(srcDir, "Alpha"), new TakeoffProject { Name = "Alpha", Lines = { ProjectMapper.FromLine(colLine) } });
+                ProjectStore.Save(ProjectStore.PathFor(srcDir, "Bravo"), new TakeoffProject { Name = "Bravo" });
+
+                Check("backup zips both projects", ProjectBackup.Backup(srcDir, zipPath) == 2);
+                Check("backup file exists", File.Exists(zipPath));
+                Check("Count reads zip contents", ProjectBackup.Count(zipPath) == 2);
+
+                Check("restore into empty folder writes both", ProjectBackup.Restore(zipPath, dstDir, true) == 2);
+                Check("restored files present",
+                    File.Exists(ProjectStore.PathFor(dstDir, "Alpha")) && File.Exists(ProjectStore.PathFor(dstDir, "Bravo")));
+                var rp = ProjectStore.Load(ProjectStore.PathFor(dstDir, "Alpha"));
+                Check("restored project keeps its lines", rp.Lines.Count == 1, rp.Lines.Count.ToString());
+
+                Check("restore without overwrite skips existing", ProjectBackup.Restore(zipPath, dstDir, false) == 0);
+                Check("restore with overwrite replaces", ProjectBackup.Restore(zipPath, dstDir, true) == 2);
+            }
+            finally
+            {
+                foreach (var d in new[] { srcDir, dstDir }) if (Directory.Exists(d)) Directory.Delete(d, true);
+                if (File.Exists(zipPath)) File.Delete(zipPath);
+            }
+
+            Console.WriteLine("\nNo member cap — a big takeoff builds every request:");
+            var many2 = Enumerable.Range(0, 1500)
+                .Select(i => Priced(new TakeoffLine
+                {
+                    Family = db.GetFamily("W"), Shape = w12, LinearFeet = 10 + (i % 40),
+                    Coating = i % 2 == 0 ? CoatingType.Intumescent : CoatingType.Standard, WftMils = 20
+                }))
+                .ToList();
+            var bigReqs = TakeoffRequestBuilder.BuildAll(many2, settings);
+            Check("1500 members -> 1500 requests (no cap)", bigReqs.Count == 1500, bigReqs.Count.ToString());
+
             Console.WriteLine("\nMock connector end-to-end:");
             var log = new List<string>();
             using (var conn = new MockSageConnector(m => log.Add(m)))

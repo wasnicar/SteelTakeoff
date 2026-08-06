@@ -33,6 +33,15 @@
                 </Grid>
                 <TextBlock x:Name="EffectiveFolderText" FontSize="10.5" Foreground="{StaticResource Muted}"
                            Margin="0,6,0,0" TextWrapping="Wrap"/>
+                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                    <Button Content="Back up all…" Click="Backup_Click" Padding="12,4"
+                            ToolTip="Save every project to a single .zip on your machine — keep it before installing a new version, or to move to another PC."/>
+                    <Button Content="Restore…" Click="Restore_Click" Margin="8,0,0,0" Padding="12,4"
+                            ToolTip="Bring projects back in from a backup .zip."/>
+                    <TextBlock Text="Projects also live in your profile and survive a reinstall — this is extra safety."
+                               FontSize="10.5" Foreground="{StaticResource Muted}" VerticalAlignment="Center"
+                               Margin="10,0,0,0" TextWrapping="Wrap"/>
+                </StackPanel>
             </StackPanel>
         </Border>
 

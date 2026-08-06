@@ -538,6 +538,22 @@ namespace SteelCoatingTakeoff.App.ViewModels
             catch (Exception ex) { error = ex.Message; Log("Rename failed: " + ex.Message); return false; }
         }
 
+        /// <summary>Zip every saved takeoff to the chosen file. Returns the count backed up.</summary>
+        public int BackupProjects(string zipPath)
+        {
+            var n = ProjectBackup.Backup(EffectiveProjectsDir, zipPath);
+            Log($"Backed up {n} project(s) → {zipPath}");
+            return n;
+        }
+
+        /// <summary>Restore saved takeoffs from a backup zip into the projects folder (replacing on name clash).</summary>
+        public int RestoreProjects(string zipPath)
+        {
+            var n = ProjectBackup.Restore(zipPath, EffectiveProjectsDir, overwrite: true);
+            Log($"Restored {n} project(s) from {zipPath}");
+            return n;
+        }
+
         public void DeleteProject(string path)
         {
             try

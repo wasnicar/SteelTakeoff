@@ -79,8 +79,11 @@ namespace SteelCoatingTakeoff.Core
             }
 
             var geometric = TakeoffCalculator.GeometricAreaSquareFeet(line);
-            var area = TakeoffCalculator.AreaSquareFeet(line);
+            var area = TakeoffCalculator.AreaSquareFeet(line);           // one member
+            var multiplier = TakeoffCalculator.Multiplier(line);
+            var total = TakeoffCalculator.TotalAreaSquareFeet(line);     // × member count
             var rounded = TakeoffCalculator.RoundQty(area);
+            var roundedTotal = TakeoffCalculator.RoundQty(total);
             var coats = line.Coats > 0 ? line.Coats : 1;
 
             steps.Add(new CalculationStep(
@@ -94,9 +97,22 @@ namespace SteelCoatingTakeoff.Core
                     $"{Num(geometric, 6)} ft²  ×  {coats} coats  =  {Num(area, 6)} ft²  (coats affects area, not the labor rate)"));
             }
 
-            steps.Add(new CalculationStep(
-                "Rounded",
-                $"{rounded:0.00} ft²  —  2 dp, half away from zero. This is the quantity Sage receives."));
+            if (multiplier > 1)
+            {
+                steps.Add(new CalculationStep(
+                    "Members",
+                    $"{Num(area, 6)} ft²/member  ×  {Num(multiplier)} members  =  {Num(total, 6)} ft² total"));
+                steps.Add(new CalculationStep(
+                    "Rounded",
+                    $"{rounded:0.00} ft²/member  →  '{(string.IsNullOrWhiteSpace(settings?.AreaVariableName) ? "Area SF" : settings.AreaVariableName)}' variable, " +
+                    $"× {Num(multiplier)} assembly quantity  =  {roundedTotal:0.00} ft² in Sage."));
+            }
+            else
+            {
+                steps.Add(new CalculationStep(
+                    "Rounded",
+                    $"{rounded:0.00} ft²  —  2 dp, half away from zero. This is the quantity Sage receives."));
+            }
 
             if (settings == null) return steps;
 
@@ -151,7 +167,8 @@ namespace SteelCoatingTakeoff.Core
                     $"${line.WageRate:0.00}/hr ÷ {Num(effective)} SF/hr  =  ${pricePerSf:0.####} /SF"));
                 steps.Add(new CalculationStep(
                     "Labor total",
-                    $"{rounded:0.00} SF  ×  ${pricePerSf:0.####}  =  ${amount:N2}"));
+                    $"{roundedTotal:0.00} SF  ×  ${pricePerSf:0.####}  =  ${amount:N2}" +
+                    (multiplier > 1 ? $"  ({Num(multiplier)} members)" : "")));
 
                 // Everything goes to Sage as L.Price + L.Prod; the paint line uses the effective productivity.
                 steps.Add(line.Coating == CoatingType.Intumescent
@@ -185,11 +202,13 @@ namespace SteelCoatingTakeoff.Core
             steps.Add(string.IsNullOrWhiteSpace(settings.AreaVariableName)
                 ? new CalculationStep(
                     "Sent as",
-                    "the assembly's takeoff QUANTITY (Area variable is blank). An SF-unit assembly " +
-                    "with no calculation multiplies each of its items by this.")
+                    $"the assembly's takeoff QUANTITY (Area variable is blank) = {roundedTotal:0.00} " +
+                    (multiplier > 1 ? $"(per-member {rounded:0.00} × {Num(multiplier)} members). " : ". ") +
+                    "An SF-unit assembly with no calculation multiplies each of its items by this.")
                 : new CalculationStep(
                     "Sent as",
-                    $"assembly takeoff variable '{settings.AreaVariableName}' = {rounded:0.00}"));
+                    $"per-member area to variable '{settings.AreaVariableName}' = {rounded:0.00}, and the " +
+                    $"member count {Num(multiplier)} as the assembly quantity → items at {roundedTotal:0.00} SF."));
 
             if (!string.IsNullOrWhiteSpace(settings.LinearFeetVariableName))
             {

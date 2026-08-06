@@ -28,10 +28,11 @@ namespace SteelCoatingTakeoff.Core.Reporting
         private const double XType = 166.0;
         private const double XTypeWidth = 62.0;
         private const double XCoating = 236.0;
-        private const double XCoats = 300.0;
-        private const double XWft = 340.0;
-        private const double XLf = 392.0;
-        private const double XSfLf = 446.0;
+        private const double XCoats = 288.0;
+        private const double XWft = 322.0;
+        private const double XQty = 356.0;
+        private const double XLf = 404.0;
+        private const double XSfLf = 452.0;
         private const double XArea = 508.0;
         private const double XWage = 566.0;
         private const double XProd = 622.0;
@@ -80,13 +81,15 @@ namespace SteelCoatingTakeoff.Core.Reporting
                     y = Heading(pdf, settings, estimateName, generatedAt, page);
                 }
 
-                var area = TakeoffCalculator.AreaSquareFeet(line);
+                var multiplier = TakeoffCalculator.Multiplier(line);
+                var area = TakeoffCalculator.TotalAreaSquareFeet(line);        // × member count
+                var extLf = line.LinearFeet * multiplier;
                 var labor = TakeoffCalculator.LaborAmount(line, divisor, solids);
                 var rate = TakeoffCalculator.LaborPricePerSquareFoot(line, divisor, solids);
                 var prod = TakeoffCalculator.EffectiveProductivity(line, divisor, solids);
                 var intumescent = line.Coating == CoatingType.Intumescent;
 
-                totalLf += line.LinearFeet;
+                totalLf += extLf;
                 totalArea += area;
                 totalLabor += labor;
                 if (intumescent) intumescentArea += area; else standardArea += area;
@@ -100,7 +103,8 @@ namespace SteelCoatingTakeoff.Core.Reporting
                          intumescent ? 0.35 : 0.0);
                 pdf.TextRight(XCoats, y, line.Coats > 0 ? line.Coats.ToString() : "1", BodySize);
                 pdf.TextRight(XWft, y, intumescent && line.DftMils > 0 ? line.DftMils.ToString("0.##") : "-", BodySize);
-                pdf.TextRight(XLf, y, line.LinearFeet.ToString("N2"), BodySize);
+                pdf.TextRight(XQty, y, multiplier.ToString("0.##"), BodySize);
+                pdf.TextRight(XLf, y, extLf.ToString("N2"), BodySize);
                 pdf.TextRight(XSfLf, y, TakeoffCalculator.SfPerFoot(line).ToString("0.####"), BodySize);
                 pdf.TextRight(XArea, y, area.ToString("N2"), BodySize);
                 pdf.TextRight(XWage, y, line.WageRate > 0 ? line.WageRate.ToString("N2") : "-", BodySize);
@@ -150,6 +154,7 @@ namespace SteelCoatingTakeoff.Core.Reporting
             pdf.Text(XCoating, y, "Coat", 8.5, PdfFont.Bold);
             pdf.TextRight(XCoats, y, "Coats", 8.5, PdfFont.MonoBold);
             pdf.TextRight(XWft, y, "DFT", 8.5, PdfFont.MonoBold);
+            pdf.TextRight(XQty, y, "Qty", 8.5, PdfFont.MonoBold);
             pdf.TextRight(XLf, y, "LF", 8.5, PdfFont.MonoBold);
             pdf.TextRight(XSfLf, y, "SF/LF", 8.5, PdfFont.MonoBold);
             pdf.TextRight(XArea, y, "Area SF", 8.5, PdfFont.MonoBold);
@@ -185,7 +190,8 @@ namespace SteelCoatingTakeoff.Core.Reporting
         private static void Footer(PdfWriter pdf, int page)
         {
             pdf.Text(Margin, Margin - 8.0,
-                     "Area = SF/LF x linear feet x coats. Labor = area x (wage / effective productivity).",
+                     "LF and Area SF are extended by Qty (member count). Area = SF/LF x LF x coats x qty. " +
+                     "Labor = area x (wage / effective productivity).",
                      7.5, PdfFont.Regular, 0.55);
             pdf.TextRight(Right, Margin - 8.0, "Page " + page, 7.5, PdfFont.Mono, 0.55);
         }

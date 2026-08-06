@@ -1,12 +1,17 @@
 <Window x:Class="SteelCoatingTakeoff.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:app="clr-namespace:SteelCoatingTakeoff.App"
         Title="Steel Coating Takeoff → Sage Estimating"
         Height="820" Width="1280"
         MinHeight="620" MinWidth="1040"
         Background="{StaticResource Bg}"
         WindowStartupLocation="CenterScreen"
         FontFamily="Segoe UI">
+
+    <Window.Resources>
+        <app:ZeroBlankConverter x:Key="ZeroBlank"/>
+    </Window.Resources>
 
     <Grid>
         <Grid.ColumnDefinitions>
@@ -32,7 +37,7 @@
 
                 <!-- Footer -->
                 <TextBlock DockPanel.Dock="Bottom" Margin="6,10,0,0" FontSize="11" Foreground="{StaticResource Muted}"
-                           Text="v3.5 · Sage Estimating 25.2"/>
+                           Text="v3.6 · Sage Estimating 25.2"/>
 
                 <!-- Nav -->
                 <StackPanel DockPanel.Dock="Top">
@@ -390,8 +395,19 @@
                                         <DataGridTemplateColumn Header="Length" Width="0.8*">
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate>
-                                                    <TextBox Text="{Binding LinearFeet, UpdateSourceTrigger=PropertyChanged, StringFormat={}{0:0.##}}"
-                                                             TextAlignment="Right" Margin="6,4"/>
+                                                    <TextBox Text="{Binding LinearFeet, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource ZeroBlank}}"
+                                                             TextAlignment="Right" Margin="6,4"
+                                                             ToolTip="Linear feet of this member (the eTakeoff quantity)."/>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+
+                                        <DataGridTemplateColumn Header="Qty" Width="0.5*">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <TextBox Text="{Binding Multiplier, UpdateSourceTrigger=PropertyChanged, StringFormat={}{0:0.##}}"
+                                                             TextAlignment="Right" Margin="6,4"
+                                                             ToolTip="Member count — take off this same length more than once. Drives the Sage assembly quantity; multiplies area and labor. Defaults to 1."/>
                                                 </DataTemplate>
                                             </DataGridTemplateColumn.CellTemplate>
                                         </DataGridTemplateColumn>

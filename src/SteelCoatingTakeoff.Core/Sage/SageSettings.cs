@@ -163,19 +163,17 @@ namespace SteelCoatingTakeoff.Core.Sage
         public string StandardLaborItemMatch { get; set; } = "";
 
         /// <summary>
-        /// How the coating AREA reaches the assembly.
+        /// How the per-member coating AREA reaches the assembly.
         ///
-        /// Blank (the default) sends the area as the assembly's TAKEOFF QUANTITY,
-        /// which is what an SF-unit assembly whose Calculation is empty expects —
-        /// e.g. 3000.310.01, whose items are all UseFactor x 1, so each lands at the
-        /// area exactly.
+        /// "Area SF" (the default) sends the per-member area to the assembly's "Area SF"
+        /// takeoff variable, and the member COUNT becomes the assembly quantity — so items
+        /// come out at area × count. This is what the production assemblies expect.
         ///
-        /// Set this only for an assembly that instead computes its quantity from a
-        /// formula/table and takes the area through a named variable (e.g. "Area SF"
-        /// on 1100.150.051, which also needs "Area SF Calculation Type" = 4 supplied
-        /// via <see cref="ExtraVariables"/>).
+        /// Blank instead sends the area as the assembly's TAKEOFF QUANTITY directly, which
+        /// suits an SF-unit assembly whose Calculation is empty and whose items are all
+        /// UseFactor x 1 (each lands at the area exactly); the member count still scales it.
         /// </summary>
-        public string AreaVariableName { get; set; } = "";
+        public string AreaVariableName { get; set; } = "Area SF";
 
         /// <summary>
         /// Extra assembly takeoff variables to set on every request, as

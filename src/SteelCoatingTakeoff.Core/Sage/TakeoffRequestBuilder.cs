@@ -16,9 +16,10 @@ namespace SteelCoatingTakeoff.Core.Sage
             if (line == null) throw new ArgumentNullException(nameof(line));
             if (settings == null) throw new ArgumentNullException(nameof(settings));
 
-            // Total coating area = geometric area × coats. Coats affects only the SF, not
-            // the labor rate.
+            // Per-member coating area = geometric area × coats. Coats affects only the SF, not
+            // the labor rate. The member count is applied as the assembly quantity, not here.
             var area = TakeoffCalculator.RoundQty(TakeoffCalculator.AreaSquareFeet(line));
+            var multiplier = TakeoffCalculator.Multiplier(line);
             var lf = TakeoffCalculator.RoundQty(line.LinearFeet);
 
             var req = new SageTakeoffRequest
@@ -30,8 +31,9 @@ namespace SteelCoatingTakeoff.Core.Sage
                 Coating = line.Coating,
                 AssemblyId = settings.AssemblyFor(line.Coating),
                 AreaSquareFeet = area,
+                Multiplier = multiplier,
                 LinearFeet = lf,
-                Description = Describe(line, area)
+                Description = Describe(line, area, multiplier)
             };
 
             // Labor. Wage and productivity come from the LINE, so members can be priced
@@ -105,7 +107,7 @@ namespace SteelCoatingTakeoff.Core.Sage
             return list;
         }
 
-        private static string Describe(TakeoffLine line, double area)
+        private static string Describe(TakeoffLine line, double area, double multiplier)
         {
             var name = line.Shape?.Display ?? "(shape)";
             string coat;
@@ -119,7 +121,8 @@ namespace SteelCoatingTakeoff.Core.Sage
             {
                 coat = "Standard";
             }
-            return $"{name} — {line.LinearFeet:0.##} LF → {area:0.##} SF [{coat}]";
+            var qty = multiplier > 1 ? $" ×{multiplier:0.##} = {area * multiplier:0.##} SF" : "";
+            return $"{name} — {line.LinearFeet:0.##} LF → {area:0.##} SF{qty} [{coat}]";
         }
     }
 }

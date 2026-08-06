@@ -47,8 +47,10 @@ namespace SteelCoatingTakeoff.Core
         }
 
         /// <summary>
-        /// Total coating area (ft²) sent to Sage = geometric area × coats. Coats affects
-        /// only this square footage — not the labor rate. Coats defaults to 1.
+        /// Coating area for ONE member (ft²) = geometric area × coats. This is the value sent
+        /// to the assembly's "Area SF" variable; the member <see cref="Multiplier"/> is applied
+        /// separately as the assembly quantity, so it is NOT included here. Coats affects only
+        /// this square footage — not the labor rate. Coats defaults to 1.
         /// </summary>
         public static double AreaSquareFeet(TakeoffLine line)
         {
@@ -56,6 +58,21 @@ namespace SteelCoatingTakeoff.Core
             var coats = line.Coats > 0 ? line.Coats : 1;
             return GeometricAreaSquareFeet(line) * coats;
         }
+
+        /// <summary>Member count for a line — <see cref="TakeoffLine.Multiplier"/>, defaulting to 1.</summary>
+        public static double Multiplier(TakeoffLine line)
+        {
+            if (line == null) return 1.0;
+            return line.Multiplier > 0 ? line.Multiplier : 1.0;
+        }
+
+        /// <summary>
+        /// Total coating area (ft²) for the line = per-member area × member count. This is what
+        /// the grid, totals, labor and reports show; in Sage the same total is reached as the
+        /// "Area SF" variable (per-member area) × the assembly quantity (the multiplier).
+        /// </summary>
+        public static double TotalAreaSquareFeet(TakeoffLine line)
+            => AreaSquareFeet(line) * Multiplier(line);
 
         /// <summary>
         /// Base labor rate (LR, $/SF) = wage ($/hr) ÷ productivity (SF/hr). Zero when
@@ -134,9 +151,9 @@ namespace SteelCoatingTakeoff.Core
             return wageRate / effective;
         }
 
-        /// <summary>Total labor dollars for the line = area × price/SF.</summary>
+        /// <summary>Total labor dollars for the line = total area (× member count) × price/SF.</summary>
         public static double LaborAmount(TakeoffLine line, double wageRate, double productivity, double wftLaborDivisor, double volumeSolidsPercent = 65.0)
-            => AreaSquareFeet(line) * LaborPricePerSquareFoot(line, wageRate, productivity, wftLaborDivisor, volumeSolidsPercent);
+            => TotalAreaSquareFeet(line) * LaborPricePerSquareFoot(line, wageRate, productivity, wftLaborDivisor, volumeSolidsPercent);
 
         // ---- Per-member overloads ----------------------------------------
         // Labor is priced from the wage and productivity carried by the LINE. These are
@@ -151,9 +168,9 @@ namespace SteelCoatingTakeoff.Core
         public static double LaborPricePerSquareFoot(TakeoffLine line, double wftLaborDivisor, double volumeSolidsPercent = 65.0)
             => LaborPricePerSquareFoot(line, line?.WageRate ?? 0.0, line?.Productivity ?? 0.0, wftLaborDivisor, volumeSolidsPercent);
 
-        /// <summary>Labor dollars using the line's own wage and productivity.</summary>
+        /// <summary>Labor dollars using the line's own wage and productivity (× member count).</summary>
         public static double LaborAmount(TakeoffLine line, double wftLaborDivisor, double volumeSolidsPercent = 65.0)
-            => AreaSquareFeet(line) * LaborPricePerSquareFoot(line, wftLaborDivisor, volumeSolidsPercent);
+            => TotalAreaSquareFeet(line) * LaborPricePerSquareFoot(line, wftLaborDivisor, volumeSolidsPercent);
 
         /// <summary>
         /// Round for display / transmission. Sage takeoff quantities are typically

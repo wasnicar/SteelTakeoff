@@ -20,8 +20,19 @@ namespace SteelCoatingTakeoff.Core.Sage
         /// <summary>Coating classification that produced the routing.</summary>
         public CoatingType Coating { get; set; }
 
-        /// <summary>Coating AREA in square feet — the primary quantity sent to the assembly.</summary>
+        /// <summary>
+        /// Coating AREA in square feet for ONE member — sent to the assembly's "Area SF"
+        /// variable. The total (this × <see cref="Multiplier"/>) is what lands in Sage once the
+        /// assembly quantity is applied.
+        /// </summary>
         public double AreaSquareFeet { get; set; }
+
+        /// <summary>
+        /// How many identical members — the same length taken off more than once. Drives the
+        /// assembly takeoff QUANTITY (Sage's QuantityMultiplier), so items come out at
+        /// area × this. Defaults to 1.
+        /// </summary>
+        public double Multiplier { get; set; } = 1.0;
 
         /// <summary>Linear feet behind the area (optional secondary variable / audit).</summary>
         public double LinearFeet { get; set; }

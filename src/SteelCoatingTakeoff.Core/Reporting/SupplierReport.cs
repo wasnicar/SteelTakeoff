@@ -30,10 +30,11 @@ namespace SteelCoatingTakeoff.Core.Reporting
         private const double XCoating = 240.0;
         private const double XFire = 320.0;
         private const double XFireWidth = 62.0;
-        private const double XCoats = 406.0;
-        private const double XLf = 466.0;
-        private const double XSfLf = 534.0;
-        private const double XArea = 602.0;
+        private const double XCoats = 392.0;
+        private const double XQty = 436.0;      // member count (same length taken off n times)
+        private const double XLf = 492.0;
+        private const double XSfLf = 556.0;
+        private const double XArea = 610.0;
         private const double XDft = 680.0;      // supplier-provided DFT (fill-in when blank)
         private const double XDftLeft = 636.0;  // where the DFT write-in underline starts
         private const double XWft = Right;      // computed WFT, for reference
@@ -76,9 +77,11 @@ namespace SteelCoatingTakeoff.Core.Reporting
                     y = Heading(pdf, estimateName, generatedAt);
                 }
 
-                var area = TakeoffCalculator.AreaSquareFeet(line);
+                var multiplier = TakeoffCalculator.Multiplier(line);
+                var area = TakeoffCalculator.TotalAreaSquareFeet(line);    // × member count
+                var extLf = line.LinearFeet * multiplier;
                 var intumescent = line.Coating == CoatingType.Intumescent;
-                totalLf += line.LinearFeet;
+                totalLf += extLf;
                 totalArea += area;
 
                 var index = rows.IndexOf(line) + 1;
@@ -91,7 +94,8 @@ namespace SteelCoatingTakeoff.Core.Reporting
                 pdf.Text(XFire, y, ReportShared.Fit(string.IsNullOrWhiteSpace(line.FireRating) ? "-" : line.FireRating.Trim(),
                          XFireWidth, BodySize, PdfFont.Regular), BodySize);
                 pdf.TextRight(XCoats, y, line.Coats > 0 ? line.Coats.ToString() : "1", BodySize);
-                pdf.TextRight(XLf, y, line.LinearFeet.ToString("N2"), BodySize);
+                pdf.TextRight(XQty, y, multiplier.ToString("0.##"), BodySize);
+                pdf.TextRight(XLf, y, extLf.ToString("N2"), BodySize);
                 pdf.TextRight(XSfLf, y, TakeoffCalculator.SfPerFoot(line).ToString("0.####"), BodySize);
                 pdf.TextRight(XArea, y, area.ToString("N2"), BodySize);
 
@@ -152,6 +156,7 @@ namespace SteelCoatingTakeoff.Core.Reporting
             pdf.Text(XCoating, y, "Coating", 8.5, PdfFont.Bold);
             pdf.Text(XFire, y, "Fire Rating", 8.5, PdfFont.Bold);
             pdf.TextRight(XCoats, y, "Coats", 8.5, PdfFont.MonoBold);
+            pdf.TextRight(XQty, y, "Qty", 8.5, PdfFont.MonoBold);
             pdf.TextRight(XLf, y, "LF", 8.5, PdfFont.MonoBold);
             pdf.TextRight(XSfLf, y, "SF/LF", 8.5, PdfFont.MonoBold);
             pdf.TextRight(XArea, y, "Area SF", 8.5, PdfFont.MonoBold);
@@ -177,7 +182,8 @@ namespace SteelCoatingTakeoff.Core.Reporting
         private static void Footer(PdfWriter pdf, int page)
         {
             pdf.Text(Margin, Margin - 8.0,
-                     "Quantities only — no pricing. Area = SF/LF x linear feet x coats.",
+                     "Quantities only — no pricing. Qty is the member count; LF and Area are extended by it. " +
+                     "Area = SF/LF x LF x coats x qty.",
                      7.5, PdfFont.Regular, 0.55);
             pdf.TextRight(Right, Margin - 8.0, "Page " + page, 7.5, PdfFont.Mono, 0.55);
         }

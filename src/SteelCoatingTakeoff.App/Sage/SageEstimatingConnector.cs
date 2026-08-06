@@ -26,12 +26,12 @@ namespace SteelCoatingTakeoff.App.Sage
     ///
     ///   * Assemblies live in the STANDARD database; items are written to the ESTIMATE
     ///     database. A takeoff therefore needs a connection to both.
-    ///   * For an SF-unit assembly whose Calculation is empty, the coating area is the
-    ///     assembly's takeoff QUANTITY (<see cref="TakeoffSession.QuantityMultiplier"/>),
-    ///     not a variable. Verified: 3000.310.01 at QuantityMultiplier=1068 wrote all
-    ///     five of its UseFactor items at 1068 sf. Assemblies that compute their own
-    ///     quantity from a formula/table instead take the area through a named variable
-    ///     (<see cref="SageSettings.AreaVariableName"/>).
+    ///   * The per-member coating area rides a named takeoff variable
+    ///     (<see cref="SageSettings.AreaVariableName"/>, default "Area SF") and the member
+    ///     COUNT is the assembly quantity (<see cref="TakeoffSession.QuantityMultiplier"/>),
+    ///     so items come out at area × count. With no area variable configured the area is
+    ///     itself the quantity instead (legacy: 3000.310.01 at QuantityMultiplier=1068 wrote
+    ///     all five UseFactor items at 1068 sf), scaled by the count.
     /// </summary>
     public sealed class SageEstimatingConnector : ISageConnector
     {
@@ -349,8 +349,12 @@ namespace SteelCoatingTakeoff.App.Sage
 
                     if (result.AssembliesTakenOff == 0)
                     {
-                        return SageTakeoffResult.Fail(
+                        // Carry the per-request log onto the failure so the reason (e.g. a
+                        // missing "Area SF" variable) is visible, not just "see the log above".
+                        var nothing = SageTakeoffResult.Fail(
                             "Nothing was taken off — see the log above. The estimate was not changed.");
+                        foreach (var line in result.Log) nothing.Log.Add(line);
+                        return nothing;
                     }
 
                     cache.WriteTakeoffSessionCommittedEntities();
@@ -406,25 +410,40 @@ namespace SteelCoatingTakeoff.App.Sage
                 foreach (var kv in extras) wanted[kv.Key] = kv.Value;
                 foreach (var kv in req.Variables) wanted[kv.Key] = kv.Value;
 
-                // The area is the assembly quantity unless it was routed to a variable.
+                // The per-member area rides a variable ("Area SF"); the member count is the
+                // assembly quantity. With no area variable configured the area is itself the
+                // quantity (the legacy behaviour), scaled by the count.
                 var areaVariable = _settings.AreaVariableName;
                 var areaByVariable = !string.IsNullOrWhiteSpace(areaVariable);
+                var multiplier = req.Multiplier > 0 ? req.Multiplier : 1.0;
                 if (areaByVariable) wanted[areaVariable] = req.AreaSquareFeet;
 
+                var areaApplied = !areaByVariable;
                 foreach (var kv in wanted)
                 {
                     var target = session.TakeoffVariables.FirstOrDefault(
                         v => string.Equals(v.Name, kv.Key, StringComparison.OrdinalIgnoreCase));
                     if (target == null)
                     {
-                        result.Log.Add(
-                            $"WARNING: '{req.AssemblyId}' has no takeoff variable '{kv.Key}' — value {kv.Value} ignored.");
+                        var isAreaVar = areaByVariable &&
+                            string.Equals(kv.Key, areaVariable, StringComparison.OrdinalIgnoreCase);
+                        result.Log.Add(isAreaVar
+                            ? $"SKIP: '{req.AssemblyId}' has no takeoff variable '{areaVariable}' — cannot deliver the " +
+                              $"coating area. Add the '{areaVariable}' variable to the assembly, or clear 'Area variable' " +
+                              $"in the Sage panel to send the area as the assembly quantity. — {req.Description}"
+                            : $"WARNING: '{req.AssemblyId}' has no takeoff variable '{kv.Key}' — value {kv.Value} ignored.");
                         continue;
                     }
                     target.Value = kv.Value;
+                    if (areaByVariable && string.Equals(kv.Key, areaVariable, StringComparison.OrdinalIgnoreCase))
+                        areaApplied = true;
                 }
 
-                if (!areaByVariable) session.QuantityMultiplier = req.AreaSquareFeet;
+                // The area variable is missing — the SKIP was already logged; do not take off
+                // with only the member count as the quantity (that would be a tiny wrong number).
+                if (!areaApplied) return;
+
+                session.QuantityMultiplier = areaByVariable ? multiplier : req.AreaSquareFeet * multiplier;
 
                 session.AddPass();
 
@@ -457,8 +476,11 @@ namespace SteelCoatingTakeoff.App.Sage
 
                 result.AssembliesTakenOff++;
                 result.ItemsCreated += written;
+                var qtyNote = multiplier > 1
+                    ? $"{req.AreaSquareFeet:0.##} SF × {multiplier:0.##} = {req.AreaSquareFeet * multiplier:0.##} SF"
+                    : $"{req.AreaSquareFeet:0.##} SF";
                 result.Log.Add(
-                    $"Takeoff '{req.AssemblyId}' — {req.Description} → {written} item(s) @ {req.AreaSquareFeet:0.##} SF");
+                    $"Takeoff '{req.AssemblyId}' — {req.Description} → {written} item(s) @ {qtyNote}");
             }
         }
 

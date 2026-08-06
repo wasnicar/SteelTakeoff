@@ -15,6 +15,13 @@ namespace SteelCoatingTakeoff.Core.Model
         /// <summary>Total linear feet for this member/size (the eTakeoff quantity).</summary>
         public double LinearFeet { get; set; }
 
+        /// <summary>
+        /// How many identical members this line stands for — the same length taken off more
+        /// than once. Drives the Sage assembly QUANTITY (the area itself goes to the "Area SF"
+        /// variable), and multiplies the displayed area and labor. Defaults to 1.
+        /// </summary>
+        public double Multiplier { get; set; } = 1.0;
+
         public CoatingType Coating { get; set; } = CoatingType.Standard;
 
         /// <summary>

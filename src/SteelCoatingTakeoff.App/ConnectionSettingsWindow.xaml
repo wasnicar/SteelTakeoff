@@ -114,9 +114,9 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0">
-                            <TextBlock Text="Area variable (blank = quantity)" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock Text="Area variable (default Area SF)" Style="{StaticResource FieldLabel}"/>
                             <TextBox Text="{Binding Settings.AreaVariableName}"
-                                     ToolTip="Blank sends the area as the assembly's takeoff quantity (correct for an SF assembly with no calculation, e.g. 3000.310.01)."/>
+                                     ToolTip="The assembly takeoff variable that receives the per-member area (default &quot;Area SF&quot;); the member count (Qty) becomes the assembly quantity. Leave blank only for an SF assembly with no calculation, which takes the area as its quantity directly."/>
                         </StackPanel>
                         <StackPanel Grid.Column="2">
                             <TextBlock Text="LF variable (opt.)" Style="{StaticResource FieldLabel}"/>

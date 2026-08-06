@@ -136,7 +136,7 @@ namespace SteelCoatingTakeoff.App.ViewModels
         public double TotalArea => Rows.Sum(r => r.AreaSquareFeet);
         public double IntumescentArea => Rows.Where(r => r.IsIntumescent).Sum(r => r.AreaSquareFeet);
         public double StandardArea => Rows.Where(r => !r.IsIntumescent).Sum(r => r.AreaSquareFeet);
-        public double TotalLinearFeet => Rows.Sum(r => r.LinearFeet);
+        public double TotalLinearFeet => Rows.Sum(r => r.LinearFeet * r.Multiplier);
         public double TotalLabor => Rows.Sum(r => r.LaborAmount);
         public int LineCount => Rows.Count;
 
@@ -351,6 +351,7 @@ namespace SteelCoatingTakeoff.App.ViewModels
                 row.SelectedShape = src.SelectedShape;
                 row.PlateWidthInches = src.PlateWidthInches;
                 row.LinearFeet = src.LinearFeet;
+                row.Multiplier = src.Multiplier;
                 row.IsIntumescent = src.IsIntumescent;
                 row.DftMils = src.DftMils;
                 row.Coats = src.Coats;

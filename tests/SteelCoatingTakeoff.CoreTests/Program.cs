@@ -298,6 +298,26 @@ namespace SteelCoatingTakeoff.CoreTests
                     new TakeoffLine { Family = db.GetFamily("W"), Shape = w12, LinearFeet = 10, Coating = CoatingType.Intumescent, DftMils = 0 },
                     50, 100, 5) == 0.0);
 
+            Console.WriteLine("\nMember multiplier (same length taken off n times):");
+            var one = new TakeoffLine { Family = db.GetFamily("W"), Shape = w12, LinearFeet = 100, Coating = CoatingType.Standard };
+            var five = new TakeoffLine { Family = db.GetFamily("W"), Shape = w12, LinearFeet = 100, Coating = CoatingType.Standard, Multiplier = 5 };
+            Near("per-member area ignores the multiplier",
+                TakeoffCalculator.AreaSquareFeet(five), TakeoffCalculator.AreaSquareFeet(one), 0.001);
+            Near("total area = per-member × count",
+                TakeoffCalculator.TotalAreaSquareFeet(five), 5.0 * TakeoffCalculator.AreaSquareFeet(one), 0.01);
+            Near("multiplier of 0 reads as 1", TakeoffCalculator.Multiplier(new TakeoffLine()), 1.0);
+            Near("labor total scales with the multiplier",
+                TakeoffCalculator.LaborAmount(five, 50, 100, 5),
+                5.0 * TakeoffCalculator.LaborAmount(one, 50, 100, 5), 0.01);
+
+            var multReq = TakeoffRequestBuilder.Build(five, prodSettings);
+            Near("request multiplier is the member count", multReq.Multiplier, 5.0);
+            Near("request area stays PER-MEMBER (count is the assembly quantity)",
+                multReq.AreaSquareFeet, TakeoffCalculator.RoundQty(TakeoffCalculator.AreaSquareFeet(one)), 0.1);
+
+            Check("default area variable is 'Area SF'", new SageSettings().AreaVariableName == "Area SF",
+                new SageSettings().AreaVariableName);
+
             var prodReq = TakeoffRequestBuilder.Build(int20, prodSettings);
             Near("request carries the effective productivity", prodReq.EffectiveProductivity, 25.0);
             Near("request carries the L.Prod Factor", prodReq.LaborProductivityFactor, 1.0);
@@ -430,7 +450,7 @@ namespace SteelCoatingTakeoff.CoreTests
             {
                 Family = db.GetFamily("W"), Shape = w12, LinearFeet = 100,
                 Coating = CoatingType.Intumescent, DftMils = 13, FireRating = "2 hr",
-                MemberType = MemberKind.Column, Support = SupportKind.Roof
+                MemberType = MemberKind.Column, Support = SupportKind.Roof, Multiplier = 2
             });
             Near("classification does not change area",
                 TakeoffCalculator.AreaSquareFeet(colLine), TakeoffCalculator.AreaSquareFeet(frLine), 0.001);
@@ -480,6 +500,7 @@ namespace SteelCoatingTakeoff.CoreTests
                 Check("round-trip: shape resolved", back.Shape != null && back.Shape.AiscKey == w12.AiscKey);
                 Check("round-trip: coating", back.Coating == CoatingType.Intumescent);
                 Near("round-trip: DFT", back.DftMils, 13.0);
+                Near("round-trip: multiplier", back.Multiplier, 2.0);
                 Near("round-trip: wage", back.WageRate, 50.0);
                 Check("round-trip: fire rating", back.FireRating == "2 hr");
                 Check("round-trip: member type", back.MemberType == MemberKind.Column);

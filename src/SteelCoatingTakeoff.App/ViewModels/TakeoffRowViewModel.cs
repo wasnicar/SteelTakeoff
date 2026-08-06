@@ -25,7 +25,8 @@ namespace SteelCoatingTakeoff.App.ViewModels
         private ShapeFamily _family;
         private SteelShape _shape;
         private double _plateWidthInches = 12.0;
-        private double _linearFeet = 20.0;
+        private double _linearFeet;            // blank until the user enters the takeoff length
+        private double _multiplier = 1.0;
         private bool _isIntumescent;
         private double _dftMils;
         private int _coats = 1;
@@ -137,6 +138,17 @@ namespace SteelCoatingTakeoff.App.ViewModels
             set { if (Set(ref _linearFeet, value)) NotifyComputed(); }
         }
 
+        /// <summary>
+        /// How many identical members this row stands for — the same length taken off more
+        /// than once. Multiplies the displayed area and labor, and drives the Sage assembly
+        /// quantity. Defaults to 1.
+        /// </summary>
+        public double Multiplier
+        {
+            get => _multiplier;
+            set { if (Set(ref _multiplier, value <= 0 ? 1.0 : value)) NotifyComputed(); }
+        }
+
         /// <summary>Intumescent YES/NO — the routing switch, and what makes WFT apply.</summary>
         public bool IsIntumescent
         {
@@ -221,8 +233,8 @@ namespace SteelCoatingTakeoff.App.ViewModels
 
         public double SfPerFoot => TakeoffCalculator.SfPerFoot(ToLine());
 
-        /// <summary>Wrapped coating area — the quantity sent to Sage (same for both coating types).</summary>
-        public double AreaSquareFeet => TakeoffCalculator.AreaSquareFeet(ToLine());
+        /// <summary>Total wrapped coating area for this row — per-member area × member count.</summary>
+        public double AreaSquareFeet => TakeoffCalculator.TotalAreaSquareFeet(ToLine());
 
         /// <summary>Labor dollars for this line, using this member's own wage + productivity.</summary>
         public double LaborAmount =>
@@ -239,6 +251,7 @@ namespace SteelCoatingTakeoff.App.ViewModels
             Shape = SelectedShape,
             PlateWidthInches = PlateWidthInches,
             LinearFeet = LinearFeet,
+            Multiplier = Multiplier,
             Coating = Coating,
             DftMils = DftMils,
             Coats = Coats,
@@ -279,6 +292,7 @@ namespace SteelCoatingTakeoff.App.ViewModels
             if (line.Shape != null) SelectedShape = line.Shape;
             PlateWidthInches = line.PlateWidthInches;
             LinearFeet = line.LinearFeet;
+            Multiplier = line.Multiplier <= 0 ? 1.0 : line.Multiplier;
             IsIntumescent = line.Coating == CoatingType.Intumescent;
             DftMils = line.DftMils;
             Coats = line.Coats;

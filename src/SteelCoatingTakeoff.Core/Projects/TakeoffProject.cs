@@ -17,6 +17,8 @@ namespace SteelCoatingTakeoff.Core.Projects
         public string ShapeKey { get; set; } = "";
         public double PlateWidthInches { get; set; } = 12.0;
         public double LinearFeet { get; set; }
+        /// <summary>How many identical members — the same length taken off more than once. 0/absent reads as 1.</summary>
+        public double Multiplier { get; set; } = 1.0;
         public bool Intumescent { get; set; }
         public double DftMils { get; set; }
         /// <summary>Legacy field — projects saved before the DFT switch stored WFT here; read as DFT if present.</summary>
@@ -69,6 +71,7 @@ namespace SteelCoatingTakeoff.Core.Projects
                 ShapeKey = line.Shape?.AiscKey ?? "",
                 PlateWidthInches = line.PlateWidthInches,
                 LinearFeet = line.LinearFeet,
+                Multiplier = line.Multiplier,
                 Intumescent = line.Coating == CoatingType.Intumescent,
                 DftMils = line.DftMils,
                 Coats = line.Coats,
@@ -96,6 +99,7 @@ namespace SteelCoatingTakeoff.Core.Projects
                 Shape = shape,
                 PlateWidthInches = dto.PlateWidthInches,
                 LinearFeet = dto.LinearFeet,
+                Multiplier = dto.Multiplier <= 0 ? 1.0 : dto.Multiplier,
                 Coating = dto.Intumescent ? CoatingType.Intumescent : CoatingType.Standard,
                 // Prefer DFT; fall back to a legacy WFT value from pre-DFT projects.
                 DftMils = dto.DftMils > 0 ? dto.DftMils : dto.WftMils,

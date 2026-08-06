@@ -27,7 +27,7 @@ namespace SteelCoatingTakeoff.App.ViewModels
         private double _plateWidthInches = 12.0;
         private double _linearFeet = 20.0;
         private bool _isIntumescent;
-        private double _wftMils;
+        private double _dftMils;
         private int _coats = 1;
         private string _fireRating = "";
         private MemberKind _memberType = MemberKind.Unspecified;
@@ -48,7 +48,7 @@ namespace SteelCoatingTakeoff.App.ViewModels
         {
             Families = families;
             _settings = settings;
-            _wftMils = settings?.DefaultWftMils ?? 0;
+            _dftMils = settings?.DefaultDftMils ?? 0;
             _coats = settings?.DefaultCoats > 0 ? settings.DefaultCoats : 1;
             _fireRating = settings?.DefaultFireRating ?? "";
             _memberType = settings?.DefaultMemberType ?? MemberKind.Unspecified;
@@ -96,13 +96,16 @@ namespace SteelCoatingTakeoff.App.ViewModels
             set { if (Set(ref _laborProductivityFactor, value)) NotifyComputed(); }
         }
 
-        /// <summary>Effective SF/hr for this member — productivity after any WFT penalty.</summary>
+        private double Divisor => _settings?.WftLaborDivisor ?? 5.0;
+        private double Solids => _settings?.VolumeSolidsPercent ?? 65.0;
+
+        /// <summary>Effective SF/hr for this member — productivity after the DFT-derived thickness penalty.</summary>
         public double EffectiveProductivity =>
-            TakeoffCalculator.EffectiveProductivity(ToLine(), _settings?.WftLaborDivisor ?? 5.0);
+            TakeoffCalculator.EffectiveProductivity(ToLine(), Divisor, Solids);
 
         /// <summary>Labor price per square foot for this member.</summary>
         public double LaborPricePerSquareFoot =>
-            TakeoffCalculator.LaborPricePerSquareFoot(ToLine(), _settings?.WftLaborDivisor ?? 5.0);
+            TakeoffCalculator.LaborPricePerSquareFoot(ToLine(), Divisor, Solids);
 
         public ShapeFamily SelectedFamily
         {
@@ -146,11 +149,11 @@ namespace SteelCoatingTakeoff.App.ViewModels
             }
         }
 
-        /// <summary>Specified wet film thickness (mils). Only used when Intumescent is ticked.</summary>
-        public double WftMils
+        /// <summary>Specified DRY film thickness (mils), from the supplier. Only used when Intumescent is ticked.</summary>
+        public double DftMils
         {
-            get => _wftMils;
-            set { if (Set(ref _wftMils, value)) NotifyComputed(); }
+            get => _dftMils;
+            set { if (Set(ref _dftMils, value)) NotifyComputed(); }
         }
 
         /// <summary>Number of coats for this line (any coating type). Multiplies area.</summary>
@@ -223,7 +226,7 @@ namespace SteelCoatingTakeoff.App.ViewModels
 
         /// <summary>Labor dollars for this line, using this member's own wage + productivity.</summary>
         public double LaborAmount =>
-            TakeoffCalculator.LaborAmount(ToLine(), _settings?.WftLaborDivisor ?? 5.0);
+            TakeoffCalculator.LaborAmount(ToLine(), Divisor, Solids);
 
         /// <summary>Step-by-step derivation shown under the row by "Show calculation".</summary>
         public IReadOnlyList<CalculationStep> CalculationSteps => TakeoffExplainer.Explain(ToLine(), _settings);
@@ -237,7 +240,7 @@ namespace SteelCoatingTakeoff.App.ViewModels
             PlateWidthInches = PlateWidthInches,
             LinearFeet = LinearFeet,
             Coating = Coating,
-            WftMils = WftMils,
+            DftMils = DftMils,
             Coats = Coats,
             FireRating = FireRating,
             MemberType = _memberType,
@@ -277,7 +280,7 @@ namespace SteelCoatingTakeoff.App.ViewModels
             PlateWidthInches = line.PlateWidthInches;
             LinearFeet = line.LinearFeet;
             IsIntumescent = line.Coating == CoatingType.Intumescent;
-            WftMils = line.WftMils;
+            DftMils = line.DftMils;
             Coats = line.Coats;
             _fireRating = line.FireRating ?? "";
             _memberType = line.MemberType;

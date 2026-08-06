@@ -112,8 +112,15 @@ namespace SteelCoatingTakeoff.Core.Sage
         /// <summary>Hourly wage → L.Price (standard lines, and the intumescent split's base coats).</summary>
         public double LaborWageRate { get; set; }
 
-        /// <summary>Productivity (SF/hr) → L.Prod (standard lines, and the intumescent split's base coats).</summary>
+        /// <summary>Productivity (SF/hr) → L.Prod (standard lines, and the intumescent split's base coats — the raw value).</summary>
         public double LaborProductivity { get; set; }
+
+        /// <summary>
+        /// Effective productivity (SF/hr) → L.Prod on the intumescent PAINT line only:
+        /// the raw productivity reduced by the thickness factor (WFT ÷ divisor). Sage then
+        /// prices the paint line at wage ÷ this. Base coats use <see cref="LaborProductivity"/>.
+        /// </summary>
+        public double LaborPaintProductivity { get; set; }
 
         /// <summary>
         /// Intumescent only. When true the connector SPLITS labor across the assembly's

@@ -104,35 +104,40 @@ namespace SteelCoatingTakeoff.Core
             // Wage and productivity belong to the member, so the breakdown reports the
             // values on THIS line rather than a global rate.
             var divisor = settings.WftLaborDivisor > 0 ? settings.WftLaborDivisor : 5.0;
+            var solids = settings.VolumeSolidsPercent > 0 ? settings.VolumeSolidsPercent : 65.0;
             if (line.WageRate <= 0 || line.Productivity <= 0)
             {
                 steps.Add(new CalculationStep(
                     "Labor",
                     "⚠  Select this member and set its Wage rate and Productivity to price labor."));
             }
-            else if (line.Coating == CoatingType.Intumescent && line.WftMils <= 0)
+            else if (line.Coating == CoatingType.Intumescent && line.DftMils <= 0)
             {
-                steps.Add(new CalculationStep("Labor", "⚠  WFT is not set — intumescent labor needs a thickness."));
+                steps.Add(new CalculationStep("Labor", "⚠  DFT is not set — intumescent labor needs a thickness."));
             }
             else
             {
-                var effective = TakeoffCalculator.EffectiveProductivity(line, divisor);
-                var pricePerSf = TakeoffCalculator.LaborPricePerSquareFoot(line, divisor);
-                var amount = TakeoffCalculator.LaborAmount(line, divisor);
+                var effective = TakeoffCalculator.EffectiveProductivity(line, divisor, solids);
+                var pricePerSf = TakeoffCalculator.LaborPricePerSquareFoot(line, divisor, solids);
+                var amount = TakeoffCalculator.LaborAmount(line, divisor, solids);
 
                 if (line.Coating == CoatingType.Intumescent)
                 {
-                    var factor = TakeoffCalculator.IntumescentFactor(line, divisor);
+                    var wft = TakeoffCalculator.WftMils(line, solids);
+                    var factor = TakeoffCalculator.IntumescentFactor(line, divisor, solids);
+                    steps.Add(new CalculationStep(
+                        "DFT → WFT",
+                        $"DFT {Num(line.DftMils)} mils ÷ {Num(solids)}% solids  =  WFT {Num(wft)} mils"));
                     steps.Add(new CalculationStep(
                         "Thickness factor",
-                        $"WFT {Num(line.WftMils)} mils ÷ {Num(divisor)}  =  {Num(factor)}"));
+                        $"WFT {Num(wft)} mils ÷ {Num(divisor)}  =  {Num(factor)}"));
                     steps.Add(new CalculationStep(
                         "Effective productivity",
                         $"{Num(line.Productivity)} SF/hr ÷ {Num(factor)}  =  {Num(effective)} SF/hr"));
                     steps.Add(new CalculationStep(
                         "why",
                         "Thickness slows the crew rather than adding area — a heavier film means fewer " +
-                        "square feet per hour, so WFT divides productivity."));
+                        "square feet per hour, so WFT divides productivity. WFT is shown only here."));
                 }
                 else
                 {
@@ -148,13 +153,13 @@ namespace SteelCoatingTakeoff.Core
                     "Labor total",
                     $"{rounded:0.00} SF  ×  ${pricePerSf:0.####}  =  ${amount:N2}"));
 
-                // How the labor reaches Sage differs by coating type.
+                // Everything goes to Sage as L.Price + L.Prod; the paint line uses the effective productivity.
                 steps.Add(line.Coating == CoatingType.Intumescent
                     ? new CalculationStep(
                         "Sent to Sage",
-                        $"Intumescent paint line: ${pricePerSf:0.####}/SF as the labor UnitPrice. Every other item " +
-                        $"in the assembly: L.Price ${line.WageRate:0.00}/hr and L.Prod {Num(line.Productivity)} SF/hr, " +
-                        "so Sage prices the base coats too. (The Labor total above is the paint line only.)")
+                        $"Intumescent paint line: L.Price ${line.WageRate:0.00}/hr and L.Prod {Num(effective)} SF/hr " +
+                        $"(effective). Every other item: L.Price ${line.WageRate:0.00}/hr and L.Prod {Num(line.Productivity)} SF/hr " +
+                        "(raw). Sage prices all of them. (The Labor total above is the paint line only.)")
                     : new CalculationStep(
                         "Sent to Sage",
                         $"L.Price ${line.WageRate:0.00}/hr and L.Prod {Num(line.Productivity)} SF/hr (labor ordered in " +
@@ -162,8 +167,8 @@ namespace SteelCoatingTakeoff.Core
 
                 steps.Add(new CalculationStep(
                     "L.Prod Factor",
-                    $"{Num(line.LaborProductivityFactor)}  → sent to Sage's L.Prod Factor column. " +
-                    "It does not change the $/SF above, and Sage keeps it only on an item that has a " +
+                    $"{Num(line.LaborProductivityFactor)}  → sent to Sage's separate L.Prod Factor column. " +
+                    "It does not change the productivity above, and Sage keeps it only on an item that has a " +
                     "crew rate table; on these coating items it resets to 1."));
             }
 

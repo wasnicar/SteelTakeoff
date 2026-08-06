@@ -51,8 +51,9 @@ namespace SteelCoatingTakeoff.Core.Sage
             // wage+productivity.
             if (line.WageRate > 0 && line.Productivity > 0)
             {
-                var effective = TakeoffCalculator.EffectiveProductivity(line, settings.WftLaborDivisor);
-                var pricePerSf = TakeoffCalculator.LaborPricePerSquareFoot(line, settings.WftLaborDivisor);
+                var solids = settings.VolumeSolidsPercent;
+                var effective = TakeoffCalculator.EffectiveProductivity(line, settings.WftLaborDivisor, solids);
+                var pricePerSf = TakeoffCalculator.LaborPricePerSquareFoot(line, settings.WftLaborDivisor, solids);
 
                 req.AppliesLabor = true;
                 req.LaborItemMatch = settings.LaborItemMatchFor(line.Coating);
@@ -60,18 +61,19 @@ namespace SteelCoatingTakeoff.Core.Sage
                 req.LaborProductivityFactor = line.LaborProductivityFactor;
                 req.LaborWageRate = TakeoffCalculator.RoundQty(line.WageRate, 4);
                 req.LaborProductivity = TakeoffCalculator.RoundQty(line.Productivity, 4);
-                req.LaborUnitPrice = TakeoffCalculator.RoundQty(pricePerSf, 4);
+                req.LaborUnitPrice = TakeoffCalculator.RoundQty(pricePerSf, 4);   // fallback $/SF only
 
                 if (line.Coating == CoatingType.Intumescent)
                 {
-                    // Split: the paint line (LaborItemMatch) gets the WFT $/SF; every OTHER
-                    // item in the assembly gets the wage + productivity from takeoff.
+                    // Everything gets wage → L.Price. The PAINT line gets the EFFECTIVE
+                    // productivity as its L.Prod (so Sage prices it at wage ÷ effective);
+                    // every OTHER item gets the raw productivity.
                     req.SplitIntumescentLabor = true;
                     req.LaborAsProductivity = false;
+                    req.LaborPaintProductivity = TakeoffCalculator.RoundQty(effective, 4);
                     req.LaborBasis =
-                        $"paint ${req.LaborUnitPrice:0.####}/SF (WFT {line.WftMils:0.##}/{settings.WftLaborDivisor:0.##}"
-                        + $" × ${line.WageRate:0.00}/hr ÷ {line.Productivity:0.##} SF/hr); "
-                        + $"other items ${line.WageRate:0.00}/hr ÷ {line.Productivity:0.##} SF/hr";
+                        $"paint L.Price ${line.WageRate:0.00}/hr, L.Prod {effective:0.##} SF/hr (effective); "
+                        + $"other items L.Prod {line.Productivity:0.##} SF/hr";
                 }
                 else
                 {
@@ -110,7 +112,7 @@ namespace SteelCoatingTakeoff.Core.Sage
             if (line.Coating == CoatingType.Intumescent)
             {
                 coat = "Intumescent";
-                if (line.WftMils > 0) coat += $" @ {line.WftMils:0.##} mils WFT";
+                if (line.DftMils > 0) coat += $" @ {line.DftMils:0.##} mils DFT";
                 if (line.Coats > 1) coat += $" ×{line.Coats} coats";
             }
             else

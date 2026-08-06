@@ -18,12 +18,13 @@ namespace SteelCoatingTakeoff.Core.Model
         public CoatingType Coating { get; set; } = CoatingType.Standard;
 
         /// <summary>
-        /// Specified wet film thickness in mils. Only meaningful when
-        /// <see cref="Coating"/> is Intumescent — thickness drives the application
-        /// LABOR (productivity = WFT / divisor), and varies per member with W/D ratio
-        /// and fire rating. 0 means "not specified".
+        /// Specified DRY film thickness in mils — the value the coatings supplier gives.
+        /// Only meaningful when <see cref="Coating"/> is Intumescent. Wet film thickness
+        /// (WFT = DFT ÷ volume-solids) is derived from this and drives the application
+        /// LABOR (productivity = WFT / divisor); it varies per member with W/D ratio and
+        /// fire rating. 0 means "not specified".
         /// </summary>
-        public double WftMils { get; set; }
+        public double DftMils { get; set; }
 
         /// <summary>
         /// Number of coats for this member (any coating type). Multiplies the coating

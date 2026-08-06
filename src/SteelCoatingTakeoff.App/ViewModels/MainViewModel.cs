@@ -352,7 +352,7 @@ namespace SteelCoatingTakeoff.App.ViewModels
                 row.PlateWidthInches = src.PlateWidthInches;
                 row.LinearFeet = src.LinearFeet;
                 row.IsIntumescent = src.IsIntumescent;
-                row.WftMils = src.WftMils;
+                row.DftMils = src.DftMils;
                 row.Coats = src.Coats;
                 row.ApplyLabor(src.WageRate, src.Productivity, src.LaborProductivityFactor);
             }
@@ -713,13 +713,13 @@ namespace SteelCoatingTakeoff.App.ViewModels
             get => CommonInt(SelIntumescent.Select(r => r.Coats));
             set => ApplyCoats(SelIntumescent, value);
         }
-        public double? IntWftMils
+        public double? IntDftMils
         {
-            get => Common(SelIntumescent.Select(r => r.WftMils));
+            get => Common(SelIntumescent.Select(r => r.DftMils));
             set
             {
                 if (!value.HasValue) return;
-                foreach (var r in SelIntumescent) r.WftMils = value.Value;
+                foreach (var r in SelIntumescent) r.DftMils = value.Value;
                 RaiseSelectionState();
             }
         }
@@ -758,7 +758,7 @@ namespace SteelCoatingTakeoff.App.ViewModels
             Raise(nameof(IntProductivity));
             Raise(nameof(IntProdFactor));
             Raise(nameof(IntCoats));
-            Raise(nameof(IntWftMils));
+            Raise(nameof(IntDftMils));
         }
 
         // ---------- Sage ----------

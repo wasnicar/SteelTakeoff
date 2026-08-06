@@ -104,11 +104,17 @@ namespace SteelCoatingTakeoff.Core.Sage
         public double WftLaborDivisor { get; set; } = 5.0;
 
         /// <summary>
-        /// Default wet film thickness (mils) pre-filled into each new intumescent line.
-        /// The estimator overrides it per member (thickness varies with W/D ratio and
-        /// the required fire rating).
+        /// Default DRY film thickness (mils) pre-filled into each new intumescent line.
+        /// The estimator overrides it per member with the supplier-provided DFT.
         /// </summary>
-        public double DefaultWftMils { get; set; } = 0;
+        public double DefaultDftMils { get; set; } = 0;
+
+        /// <summary>
+        /// Coating volume solids (percent) used to turn the entered DFT into WFT for the
+        /// labor factor: WFT = DFT ÷ (this ÷ 100). Default 65 (65% solids, 35% evaporates).
+        /// Editable because it varies by product.
+        /// </summary>
+        public double VolumeSolidsPercent { get; set; } = 65.0;
 
         /// <summary>
         /// Number of coats pre-filled into each new line (any coating type). Coats is a

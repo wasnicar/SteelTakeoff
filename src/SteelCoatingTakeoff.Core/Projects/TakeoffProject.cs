@@ -18,6 +18,8 @@ namespace SteelCoatingTakeoff.Core.Projects
         public double PlateWidthInches { get; set; } = 12.0;
         public double LinearFeet { get; set; }
         public bool Intumescent { get; set; }
+        public double DftMils { get; set; }
+        /// <summary>Legacy field — projects saved before the DFT switch stored WFT here; read as DFT if present.</summary>
         public double WftMils { get; set; }
         public int Coats { get; set; } = 1;
         public string FireRating { get; set; } = "";
@@ -68,7 +70,7 @@ namespace SteelCoatingTakeoff.Core.Projects
                 PlateWidthInches = line.PlateWidthInches,
                 LinearFeet = line.LinearFeet,
                 Intumescent = line.Coating == CoatingType.Intumescent,
-                WftMils = line.WftMils,
+                DftMils = line.DftMils,
                 Coats = line.Coats,
                 FireRating = line.FireRating ?? "",
                 MemberType = line.MemberType.ToString(),
@@ -95,7 +97,8 @@ namespace SteelCoatingTakeoff.Core.Projects
                 PlateWidthInches = dto.PlateWidthInches,
                 LinearFeet = dto.LinearFeet,
                 Coating = dto.Intumescent ? CoatingType.Intumescent : CoatingType.Standard,
-                WftMils = dto.WftMils,
+                // Prefer DFT; fall back to a legacy WFT value from pre-DFT projects.
+                DftMils = dto.DftMils > 0 ? dto.DftMils : dto.WftMils,
                 Coats = dto.Coats <= 0 ? 1 : dto.Coats,
                 FireRating = dto.FireRating ?? "",
                 MemberType = ParseEnum(dto.MemberType, MemberKind.Unspecified),

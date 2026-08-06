@@ -22,20 +22,21 @@ namespace SteelCoatingTakeoff.Core.Reporting
         private const double BodySize = 9.0;
 
         // Text columns give a left edge; numeric columns a right edge.
-        private const double XNum = 50.0;
-        private const double XMember = 58.0;
-        private const double XMemberWidth = 112.0;
-        private const double XType = 176.0;
-        private const double XTypeWidth = 80.0;
-        private const double XCoating = 262.0;
-        private const double XFire = 344.0;
-        private const double XFireWidth = 76.0;
-        private const double XCoats = 466.0;
-        private const double XLf = 540.0;
-        private const double XSfLf = 612.0;
-        private const double XArea = 684.0;
-        private const double XWft = Right;      // blank fill-in column
-        private const double XWftLeft = 706.0;  // where the write-in underline starts
+        private const double XNum = 48.0;
+        private const double XMember = 56.0;
+        private const double XMemberWidth = 100.0;
+        private const double XType = 162.0;
+        private const double XTypeWidth = 72.0;
+        private const double XCoating = 240.0;
+        private const double XFire = 320.0;
+        private const double XFireWidth = 62.0;
+        private const double XCoats = 406.0;
+        private const double XLf = 466.0;
+        private const double XSfLf = 534.0;
+        private const double XArea = 602.0;
+        private const double XDft = 680.0;      // supplier-provided DFT (fill-in when blank)
+        private const double XDftLeft = 636.0;  // where the DFT write-in underline starts
+        private const double XWft = Right;      // computed WFT, for reference
 
         public static void Write(
             string path,
@@ -94,14 +95,24 @@ namespace SteelCoatingTakeoff.Core.Reporting
                 pdf.TextRight(XSfLf, y, TakeoffCalculator.SfPerFoot(line).ToString("0.####"), BodySize);
                 pdf.TextRight(XArea, y, area.ToString("N2"), BodySize);
 
-                // WFT is what the supplier provides: show any value already entered,
-                // otherwise a write-in underline.
-                if (intumescent && line.WftMils > 0)
-                    pdf.TextRight(XWft, y, line.WftMils.ToString("0.##"), BodySize, PdfFont.Mono);
-                else if (intumescent)
-                    pdf.Line(XWftLeft, y - 1.0, XWft, y - 1.0, 0.5, 0.6);
-                else
+                // DFT is what the supplier provides: show any value already entered, else a
+                // write-in underline. WFT is computed from it for reference (blank until DFT
+                // is known). Standard members need neither.
+                if (!intumescent)
+                {
+                    pdf.TextRight(XDft, y, "n/a", BodySize, PdfFont.Regular, 0.6);
                     pdf.TextRight(XWft, y, "n/a", BodySize, PdfFont.Regular, 0.6);
+                }
+                else if (line.DftMils > 0)
+                {
+                    var wft = TakeoffCalculator.WftFromDft(line.DftMils, settings.VolumeSolidsPercent);
+                    pdf.TextRight(XDft, y, line.DftMils.ToString("0.##"), BodySize, PdfFont.Mono);
+                    pdf.TextRight(XWft, y, wft.ToString("0.##"), BodySize, PdfFont.Mono, 0.35);
+                }
+                else
+                {
+                    pdf.Line(XDftLeft, y - 1.0, XDft, y - 1.0, 0.5, 0.6);   // supplier writes DFT here
+                }
 
                 y -= RowHeight;
             }
@@ -130,7 +141,8 @@ namespace SteelCoatingTakeoff.Core.Reporting
             y -= 13.0;
 
             pdf.Text(Margin, y,
-                "Please specify the required wet film thickness (WFT, mils) for each member below, using its fire rating.",
+                "Please specify the required DRY film thickness (DFT, mils) for each member below, using its fire rating. " +
+                "WFT is computed for reference.",
                 9.0, PdfFont.Regular, 0.35);
             y -= 16.0;
 
@@ -143,7 +155,8 @@ namespace SteelCoatingTakeoff.Core.Reporting
             pdf.TextRight(XLf, y, "LF", 8.5, PdfFont.MonoBold);
             pdf.TextRight(XSfLf, y, "SF/LF", 8.5, PdfFont.MonoBold);
             pdf.TextRight(XArea, y, "Area SF", 8.5, PdfFont.MonoBold);
-            pdf.TextRight(XWft, y, "WFT (mils)", 8.5, PdfFont.MonoBold);
+            pdf.TextRight(XDft, y, "DFT", 8.5, PdfFont.MonoBold);
+            pdf.TextRight(XWft, y, "WFT", 8.5, PdfFont.MonoBold);
             y -= 6.0;
             pdf.Line(Margin, y, Right, y, 0.7, 0.55);
 

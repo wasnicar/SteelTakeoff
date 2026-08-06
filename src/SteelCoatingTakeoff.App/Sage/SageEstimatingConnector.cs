@@ -463,26 +463,23 @@ namespace SteelCoatingTakeoff.App.Sage
         }
 
         /// <summary>
-        /// Write labor onto the generated items. Three shapes, chosen per request:
+        /// Write labor onto the generated items. Everything uses wage → L.Price and a
+        /// productivity → L.Prod, ordered in hours so Sage derives ManHours = qty ÷
+        /// productivity and Amount = ManHours × wage. Which productivity differs:
         ///
-        ///   standard          → wage → L.Price and productivity → L.Prod on the matched
-        ///                       items (blank match = all), ORDERED IN HOURS so Sage derives
-        ///                       ManHours = qty ÷ productivity and Amount = ManHours × wage.
+        ///   standard            → the raw productivity on the matched items (blank = all).
+        ///   intumescent (split) → the PAINT line (LaborItemMatch) gets the EFFECTIVE
+        ///                         productivity (raw ÷ thickness factor), every OTHER item
+        ///                         gets the raw productivity.
         ///
-        ///   intumescent (split) → the PAINT line (LaborItemMatch) gets the WFT $/SF as a
-        ///                       fixed labor UnitPrice (labor unit = takeoff unit = SF, so
-        ///                       no conversion); EVERY OTHER item gets wage + productivity,
-        ///                       the same hour-ordered mechanism as standard.
+        /// If the hour unit can't be resolved, each item falls back to the equivalent fixed
+        /// $/SF (wage ÷ productivity). The order unit is the crux: with it null, setting
+        /// productivity drove Amount to ZERO; ordered in hours it computes on these crew-less
+        /// coating items. Verified live.
         ///
-        ///   fixed $/SF        → a finished $/SF into the labor UnitPrice (the fallback when
-        ///                       an hour unit can't be resolved).
-        ///
-        /// The hour order unit is the crux of the wage+productivity mechanism: with the
-        /// order unit null, setting productivity drove Amount to ZERO; ordered in hours the
-        /// same fields compute correctly on these crew-less coating items. Verified live.
-        ///
-        /// L.Prod Factor (ProductivityFactor) is still sent but Sage resets it to 1 on an
-        /// item with no crew rate table; the note below says so and the amount is unaffected.
+        /// L.Prod Factor (ProductivityFactor) is a SEPARATE per-member value, sent as-is; it
+        /// does not affect these productivities. Sage resets it to 1 on an item with no crew
+        /// rate table (noted below); the amount is unaffected.
         /// </summary>
         private void ApplyLabor(SageTakeoffRequest req, EstimateItemEntityCollection items, SageTakeoffResult result)
         {
@@ -494,63 +491,53 @@ namespace SteelCoatingTakeoff.App.Sage
             var crewless = 0;
             var written = 0;
 
-            // wage → L.Price, productivity → L.Prod, ordered in hours. Falls back to the
-            // equivalent fixed $/SF (wage ÷ productivity) if the hour unit is unavailable.
-            void WriteWageProd(EstimateItemEntity item)
+            // wage → L.Price, the given productivity → L.Prod, ordered in hours so Sage
+            // prices labor = wage ÷ productivity. Falls back to the equivalent fixed $/SF
+            // if the hour unit is unavailable. The paint line passes its EFFECTIVE
+            // productivity; every other item passes the raw productivity.
+            void WriteWageProd(EstimateItemEntity item, double productivity)
             {
                 var labor = item.LaborCategory;
-                if (_hourUnit != null && req.LaborProductivity > 0)
+                if (_hourUnit != null && productivity > 0)
                 {
                     labor.OrderUnit = _hourUnit;
-                    labor.ProductivityWithFactor = req.LaborProductivity;   // L.Prod (SF/hr)
-                    labor.UnitPrice = req.LaborWageRate;                    // L.Price ($/hr)
+                    labor.ProductivityWithFactor = productivity;   // L.Prod (SF/hr)
+                    labor.UnitPrice = req.LaborWageRate;           // L.Price ($/hr)
                     labor.ConversionOperator = ConversionOperator.Divide;
                 }
                 else
                 {
-                    labor.UnitPrice = req.LaborProductivity > 0 ? req.LaborWageRate / req.LaborProductivity : 0.0;
+                    labor.UnitPrice = productivity > 0 ? req.LaborWageRate / productivity : 0.0;
                 }
                 if (req.LaborProductivityFactor > 0) labor.ProductivityFactor = req.LaborProductivityFactor;
                 if (labor.ResourceCount <= 0) crewless++;
                 written++;
                 result.Log.Add(
                     $"  labor → '{item.Description}': L.Price ${req.LaborWageRate:0.##}/hr, " +
-                    $"L.Prod {req.LaborProductivity:0.##} SF/hr = ${labor.Amount:N2}");
+                    $"L.Prod {productivity:0.##} SF/hr = ${labor.Amount:N2}");
             }
 
-            // A finished $/SF straight onto the labor UnitPrice; Amount = qty × $/SF.
-            void WriteFixed(EstimateItemEntity item, double pricePerSf)
-            {
-                var labor = item.LaborCategory;
-                labor.UnitPrice = pricePerSf;
-                if (req.LaborProductivityFactor > 0) labor.ProductivityFactor = req.LaborProductivityFactor;
-                if (labor.ResourceCount <= 0) crewless++;
-                written++;
-                result.Log.Add(
-                    $"  labor → '{item.Description}': ${pricePerSf:0.####}/SF [{req.LaborBasis}] = ${labor.Amount:N2}");
-            }
-
-            if ((req.SplitIntumescentLabor || req.LaborAsProductivity) && _hourUnit == null)
+            if (_hourUnit == null)
                 result.Log.Add(
                     $"NOTE: no 'hr' unit in the estimate — wrote '{req.AssemblyId}' wage+productivity " +
                     "labor as a fixed $/SF (wage ÷ productivity) instead.");
 
             if (req.SplitIntumescentLabor)
             {
-                // Paint line → WFT $/SF; every other item → wage + productivity.
+                // Paint line → wage + EFFECTIVE productivity; every other item → wage + raw.
                 var paint = items.Where(Matches).ToList();
                 var others = items.Where(i => !Matches(i)).ToList();
 
                 if (paint.Count == 0)
                     result.Log.Add(
                         $"WARNING: no intumescent-paint item matching '{match}' in '{req.AssemblyId}' — " +
-                        "the WFT $/SF was not written. Items: " + string.Join(", ", items.Select(i => "'" + i.Description + "'")));
-                else if (req.LaborUnitPrice <= 0)
+                        "the effective productivity was not written. Items: " + string.Join(", ", items.Select(i => "'" + i.Description + "'")));
+                else if (req.LaborPaintProductivity <= 0)
                     result.Log.Add(
-                        $"NOTE: intumescent-paint $/SF is 0 for '{req.AssemblyId}' — set the WFT to price the paint line.");
+                        $"NOTE: intumescent-paint effective productivity is 0 for '{req.AssemblyId}' — set the DFT to price the paint line.");
 
-                foreach (var p in paint) WriteFixed(p, req.LaborUnitPrice);
-                foreach (var o in others) WriteWageProd(o);
+                foreach (var p in paint) WriteWageProd(p, req.LaborPaintProductivity);
+                foreach (var o in others) WriteWageProd(o, req.LaborProductivity);
             }
             else
             {
@@ -563,8 +550,7 @@ namespace SteelCoatingTakeoff.App.Sage
                     return;
                 }
 
-                if (req.LaborAsProductivity) foreach (var t in targets) WriteWageProd(t);
-                else foreach (var t in targets) WriteFixed(t, req.LaborUnitPrice);
+                foreach (var t in targets) WriteWageProd(t, req.LaborProductivity);
             }
 
             // Don't let the estimator assume a factor they typed reached the estimate.

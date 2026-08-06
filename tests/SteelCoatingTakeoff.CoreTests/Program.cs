@@ -92,7 +92,7 @@ namespace SteelCoatingTakeoff.CoreTests
                 StandardAssembly = "STD-ASM",
                 AreaVariableName = "SF"
             };
-            var intLine = Priced(new TakeoffLine { Family = db.GetFamily("W"), Shape = w12, LinearFeet = 100, Coating = CoatingType.Intumescent, WftMils = 20 });
+            var intLine = Priced(new TakeoffLine { Family = db.GetFamily("W"), Shape = w12, LinearFeet = 100, Coating = CoatingType.Intumescent, DftMils = 13 });
             var stdLine = Priced(new TakeoffLine { Family = db.GetFamily("W"), Shape = w12, LinearFeet = 100, Coating = CoatingType.Standard });
             var intReq = TakeoffRequestBuilder.Build(intLine, settings);
             var stdReq = TakeoffRequestBuilder.Build(stdLine, settings);
@@ -110,7 +110,7 @@ namespace SteelCoatingTakeoff.CoreTests
             var wftLine = Priced(new TakeoffLine
             {
                 Family = db.GetFamily("W"), Shape = w12, LinearFeet = 240,
-                Coating = CoatingType.Intumescent, WftMils = 20, Coats = 1
+                Coating = CoatingType.Intumescent, DftMils = 13, Coats = 1
             });
             // area is NOT changed by thickness
             Near("area ignores WFT (labor, not area)", TakeoffCalculator.AreaSquareFeet(wftLine), 4.1167 * 240, 0.05);
@@ -128,7 +128,7 @@ namespace SteelCoatingTakeoff.CoreTests
             var twoCoats = Priced(new TakeoffLine
             {
                 Family = db.GetFamily("W"), Shape = w12, LinearFeet = 240,
-                Coating = CoatingType.Intumescent, WftMils = 20, Coats = 2
+                Coating = CoatingType.Intumescent, DftMils = 13, Coats = 2
             });
             Near("coats do NOT change the intumescent factor", TakeoffCalculator.IntumescentFactor(twoCoats, 5), 4.0);
             Near("geometric area ignores coats", TakeoffCalculator.GeometricAreaSquareFeet(twoCoats), 4.1167 * 240, 0.05);
@@ -220,6 +220,7 @@ namespace SteelCoatingTakeoff.CoreTests
             Check("breakdown divides the wage by the effective productivity",
                 wftExplained.Contains("$50.00/hr ÷ 25 SF/hr"));
             Check("breakdown shows the intumescent factor", wftExplained.Contains("20 mils ÷ 5"));
+            Check("breakdown shows DFT → WFT", wftExplained.Contains("DFT 13 mils ÷ 65% solids  =  WFT 20 mils"));
             Check("breakdown shows labor $/SF", wftExplained.Contains("Labor $/SF"));
             Check("breakdown shows labor total", wftExplained.Contains("Labor total"));
 
@@ -234,7 +235,7 @@ namespace SteelCoatingTakeoff.CoreTests
             var unpriced = new TakeoffLine
             {
                 Family = db.GetFamily("W"), Shape = w12, LinearFeet = 240,
-                Coating = CoatingType.Intumescent, WftMils = 20, Coats = 1
+                Coating = CoatingType.Intumescent, DftMils = 13, Coats = 1
             };
             Check("breakdown prompts for wage/productivity when unset",
                 string.Join(" | ", TakeoffExplainer.Explain(unpriced, explainSettings).Select(s => s.Detail))
@@ -245,7 +246,7 @@ namespace SteelCoatingTakeoff.CoreTests
             {
                 SqlServer = "SVR\\INST", Database = "Est", StandardDatabase = "Std",
                 WageRate = 55, Productivity = 120,
-                WftLaborDivisor = 6, DefaultWftMils = 25, DefaultCoats = 2,
+                WftLaborDivisor = 6, DefaultDftMils = 25, DefaultCoats = 2,
                 StandardLaborItemMatch = "Coat"
             };
             SageSettings roundTripped;
@@ -265,12 +266,14 @@ namespace SteelCoatingTakeoff.CoreTests
             Console.WriteLine("\nEffective productivity (WFT divides productivity):");
             var prodSettings = new SageSettings { WageRate = 50, Productivity = 100, WftLaborDivisor = 5 };
             var std100 = Priced(new TakeoffLine { Family = db.GetFamily("W"), Shape = w12, LinearFeet = 10, Coating = CoatingType.Standard });
-            var int20 = Priced(new TakeoffLine { Family = db.GetFamily("W"), Shape = w12, LinearFeet = 10, Coating = CoatingType.Intumescent, WftMils = 20 });
+            var int20 = Priced(new TakeoffLine { Family = db.GetFamily("W"), Shape = w12, LinearFeet = 10, Coating = CoatingType.Intumescent, DftMils = 13 });
 
+            // Per-member overload (line, divisor, solids) — how the app calls it.
             Near("standard: effective productivity is as entered",
-                TakeoffCalculator.EffectiveProductivity(std100, 100, 5), 100.0);
-            Near("intumescent 20 mils: 100 SF/hr -> 25 SF/hr",
-                TakeoffCalculator.EffectiveProductivity(int20, 100, 5), 25.0);
+                TakeoffCalculator.EffectiveProductivity(std100, 5, 65), 100.0);
+            Near("intumescent DFT 13 @ 65% → WFT 20: 100 SF/hr -> 25 SF/hr",
+                TakeoffCalculator.EffectiveProductivity(int20, 5, 65), 25.0);
+            Near("DFT → WFT: 13 mils ÷ 65% = 20 mils WFT", TakeoffCalculator.WftFromDft(13, 65), 20.0);
             Near("standard $/SF = wage / productivity",
                 TakeoffCalculator.LaborPricePerSquareFoot(std100, 50, 100, 5), 0.50);
             Near("intumescent $/SF = wage / effective productivity",
@@ -283,7 +286,7 @@ namespace SteelCoatingTakeoff.CoreTests
                 TakeoffCalculator.IntumescentFactor(int20, 5) * TakeoffCalculator.LaborRate(50, 100));
 
             // Coats scales area only; the rate must not move.
-            var int20x3 = Priced(new TakeoffLine { Family = db.GetFamily("W"), Shape = w12, LinearFeet = 10, Coating = CoatingType.Intumescent, WftMils = 20, Coats = 3 });
+            var int20x3 = Priced(new TakeoffLine { Family = db.GetFamily("W"), Shape = w12, LinearFeet = 10, Coating = CoatingType.Intumescent, DftMils = 13, Coats = 3 });
             Near("coats does not change the labor rate",
                 TakeoffCalculator.LaborPricePerSquareFoot(int20x3, 50, 100, 5), 2.00);
             Near("coats does scale the labor total",
@@ -292,7 +295,7 @@ namespace SteelCoatingTakeoff.CoreTests
 
             Check("intumescent with no WFT is not priceable",
                 TakeoffCalculator.LaborPricePerSquareFoot(
-                    new TakeoffLine { Family = db.GetFamily("W"), Shape = w12, LinearFeet = 10, Coating = CoatingType.Intumescent, WftMils = 0 },
+                    new TakeoffLine { Family = db.GetFamily("W"), Shape = w12, LinearFeet = 10, Coating = CoatingType.Intumescent, DftMils = 0 },
                     50, 100, 5) == 0.0);
 
             var prodReq = TakeoffRequestBuilder.Build(int20, prodSettings);
@@ -328,12 +331,13 @@ namespace SteelCoatingTakeoff.CoreTests
             Near("standard carries the productivity", stdReq3.LaborProductivity, 100.0);
             Check("standard basis mentions L.Price/L.Prod", stdReq3.LaborBasis.Contains("L.Price") && stdReq3.LaborBasis.Contains("L.Prod"));
 
-            // Intumescent: SPLIT — paint line gets the WFT $/SF; other items get wage+prod.
-            var intReq3 = TakeoffRequestBuilder.Build(int20, prodSettings);   // int20: wage 50, prod 100, WFT 20
+            // Intumescent: SPLIT — everything gets wage → L.Price; the paint line's L.Prod
+            // is the EFFECTIVE productivity, the other items' is the raw productivity.
+            var intReq3 = TakeoffRequestBuilder.Build(int20, prodSettings);   // int20: wage 50, prod 100, DFT 13 (WFT 20)
             Check("intumescent splits labor", intReq3.SplitIntumescentLabor);
-            Near("intumescent paint $/SF = WFT/5 x wage/prod = 2.00", intReq3.LaborUnitPrice, 2.00);
-            Near("intumescent base wage = 50 (raw)", intReq3.LaborWageRate, 50.0);
-            Near("intumescent base productivity = 100 (raw)", intReq3.LaborProductivity, 100.0);
+            Near("intumescent wage = 50 → L.Price", intReq3.LaborWageRate, 50.0);
+            Near("intumescent paint L.Prod = effective = 25", intReq3.LaborPaintProductivity, 25.0);
+            Near("intumescent base L.Prod = raw = 100", intReq3.LaborProductivity, 100.0);
             Check("intumescent paint match set", intReq3.LaborItemMatch == "Insulation", intReq3.LaborItemMatch);
             Check("intumescent basis names paint and other items",
                 intReq3.LaborBasis.Contains("paint") && intReq3.LaborBasis.Contains("other items"));
@@ -347,7 +351,7 @@ namespace SteelCoatingTakeoff.CoreTests
                     {
                         Family = db.GetFamily("W"), Shape = w12, LinearFeet = 10 + i,
                         Coating = i % 2 == 0 ? CoatingType.Intumescent : CoatingType.Standard,
-                        WftMils = 20, Coats = 1
+                        DftMils = 13, Coats = 1
                     }, wage: 50 + i)).ToList();   // varying wages exercise the per-member Wage column
 
                 TakeoffReport.Write(pdfPath, many, prodSettings, "Estimate 1", new DateTime(2026, 7, 21, 9, 30, 0));
@@ -376,7 +380,7 @@ namespace SteelCoatingTakeoff.CoreTests
             var frLine = Priced(new TakeoffLine
             {
                 Family = db.GetFamily("W"), Shape = w12, LinearFeet = 100,
-                Coating = CoatingType.Intumescent, WftMils = 20, FireRating = "2 hr"
+                Coating = CoatingType.Intumescent, DftMils = 13, FireRating = "2 hr"
             });
             var noFrLine = Priced(new TakeoffLine
             {
@@ -425,7 +429,7 @@ namespace SteelCoatingTakeoff.CoreTests
             var colLine = Priced(new TakeoffLine
             {
                 Family = db.GetFamily("W"), Shape = w12, LinearFeet = 100,
-                Coating = CoatingType.Intumescent, WftMils = 20, FireRating = "2 hr",
+                Coating = CoatingType.Intumescent, DftMils = 13, FireRating = "2 hr",
                 MemberType = MemberKind.Column, Support = SupportKind.Roof
             });
             Near("classification does not change area",
@@ -475,7 +479,7 @@ namespace SteelCoatingTakeoff.CoreTests
                 var back = ProjectMapper.ToLine(loaded.Lines[0], db);
                 Check("round-trip: shape resolved", back.Shape != null && back.Shape.AiscKey == w12.AiscKey);
                 Check("round-trip: coating", back.Coating == CoatingType.Intumescent);
-                Near("round-trip: WFT", back.WftMils, 20.0);
+                Near("round-trip: DFT", back.DftMils, 13.0);
                 Near("round-trip: wage", back.WageRate, 50.0);
                 Check("round-trip: fire rating", back.FireRating == "2 hr");
                 Check("round-trip: member type", back.MemberType == MemberKind.Column);
@@ -519,7 +523,7 @@ namespace SteelCoatingTakeoff.CoreTests
                 .Select(i => Priced(new TakeoffLine
                 {
                     Family = db.GetFamily("W"), Shape = w12, LinearFeet = 10 + (i % 40),
-                    Coating = i % 2 == 0 ? CoatingType.Intumescent : CoatingType.Standard, WftMils = 20
+                    Coating = i % 2 == 0 ? CoatingType.Intumescent : CoatingType.Standard, DftMils = 13
                 }))
                 .ToList();
             var bigReqs = TakeoffRequestBuilder.BuildAll(many2, settings);

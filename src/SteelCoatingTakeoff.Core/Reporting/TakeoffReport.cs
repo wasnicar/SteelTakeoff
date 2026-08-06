@@ -62,6 +62,7 @@ namespace SteelCoatingTakeoff.Core.Reporting
                        .ToList();
 
             var divisor = settings.WftLaborDivisor > 0 ? settings.WftLaborDivisor : 5.0;
+            var solids = settings.VolumeSolidsPercent > 0 ? settings.VolumeSolidsPercent : 65.0;
             var pdf = new PdfWriter();
 
             var y = Heading(pdf, settings, estimateName, generatedAt, page: 1);
@@ -80,9 +81,9 @@ namespace SteelCoatingTakeoff.Core.Reporting
                 }
 
                 var area = TakeoffCalculator.AreaSquareFeet(line);
-                var labor = TakeoffCalculator.LaborAmount(line, divisor);
-                var rate = TakeoffCalculator.LaborPricePerSquareFoot(line, divisor);
-                var prod = TakeoffCalculator.EffectiveProductivity(line, divisor);
+                var labor = TakeoffCalculator.LaborAmount(line, divisor, solids);
+                var rate = TakeoffCalculator.LaborPricePerSquareFoot(line, divisor, solids);
+                var prod = TakeoffCalculator.EffectiveProductivity(line, divisor, solids);
                 var intumescent = line.Coating == CoatingType.Intumescent;
 
                 totalLf += line.LinearFeet;
@@ -98,7 +99,7 @@ namespace SteelCoatingTakeoff.Core.Reporting
                 pdf.Text(XCoating, y, intumescent ? "Intum." : "Std", BodySize, PdfFont.Regular,
                          intumescent ? 0.35 : 0.0);
                 pdf.TextRight(XCoats, y, line.Coats > 0 ? line.Coats.ToString() : "1", BodySize);
-                pdf.TextRight(XWft, y, intumescent && line.WftMils > 0 ? line.WftMils.ToString("0.##") : "-", BodySize);
+                pdf.TextRight(XWft, y, intumescent && line.DftMils > 0 ? line.DftMils.ToString("0.##") : "-", BodySize);
                 pdf.TextRight(XLf, y, line.LinearFeet.ToString("N2"), BodySize);
                 pdf.TextRight(XSfLf, y, TakeoffCalculator.SfPerFoot(line).ToString("0.####"), BodySize);
                 pdf.TextRight(XArea, y, area.ToString("N2"), BodySize);
@@ -148,7 +149,7 @@ namespace SteelCoatingTakeoff.Core.Reporting
             pdf.Text(XType, y, "Type", 8.5, PdfFont.Bold);
             pdf.Text(XCoating, y, "Coat", 8.5, PdfFont.Bold);
             pdf.TextRight(XCoats, y, "Coats", 8.5, PdfFont.MonoBold);
-            pdf.TextRight(XWft, y, "WFT", 8.5, PdfFont.MonoBold);
+            pdf.TextRight(XWft, y, "DFT", 8.5, PdfFont.MonoBold);
             pdf.TextRight(XLf, y, "LF", 8.5, PdfFont.MonoBold);
             pdf.TextRight(XSfLf, y, "SF/LF", 8.5, PdfFont.MonoBold);
             pdf.TextRight(XArea, y, "Area SF", 8.5, PdfFont.MonoBold);

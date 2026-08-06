@@ -68,16 +68,37 @@ namespace SteelCoatingTakeoff.Core
         }
 
         /// <summary>
-        /// Intumescent thickness factor = WFT ÷ divisor. Zero for standard lines and when
-        /// WFT is unset. Divisor defaults to 5 if non-positive. Coats does NOT enter here
-        /// — it only multiplies the coating area.
+        /// Wet film thickness (mils) derived from the entered DRY film thickness:
+        ///   WFT = DFT ÷ volume-solids fraction  (e.g. 65% solids → WFT = DFT ÷ 0.65).
+        /// The solvent that evaporates is the difference. Used only for the labor factor;
+        /// the supplier provides DFT and WFT is computed.
         /// </summary>
-        public static double IntumescentFactor(TakeoffLine line, double wftLaborDivisor)
+        public static double WftFromDft(double dftMils, double volumeSolidsPercent)
+        {
+            if (dftMils <= 0) return 0.0;
+            var solids = volumeSolidsPercent > 0 ? volumeSolidsPercent : 65.0;
+            return dftMils * 100.0 / solids;
+        }
+
+        /// <summary>WFT (mils) for a line — DFT-derived, and 0 for anything but intumescent.</summary>
+        public static double WftMils(TakeoffLine line, double volumeSolidsPercent)
         {
             if (line == null || line.Coating != CoatingType.Intumescent) return 0.0;
-            if (line.WftMils <= 0) return 0.0;
+            return WftFromDft(line.DftMils, volumeSolidsPercent);
+        }
+
+        /// <summary>
+        /// Intumescent thickness factor = WFT ÷ divisor, where WFT is derived from the
+        /// entered DFT and the volume-solids fraction. Zero for standard lines and when
+        /// DFT is unset. Divisor defaults to 5, solids to 65% when non-positive. Coats does
+        /// NOT enter here — it only multiplies the coating area.
+        /// </summary>
+        public static double IntumescentFactor(TakeoffLine line, double wftLaborDivisor, double volumeSolidsPercent = 65.0)
+        {
+            var wft = WftMils(line, volumeSolidsPercent);
+            if (wft <= 0) return 0.0;
             var divisor = wftLaborDivisor > 0 ? wftLaborDivisor : 5.0;
-            return line.WftMils / divisor;
+            return wft / divisor;
         }
 
         /// <summary>
@@ -86,38 +107,36 @@ namespace SteelCoatingTakeoff.Core
         ///   standard    → the entered productivity
         ///   intumescent → productivity ÷ (WFT ÷ divisor)
         ///
-        /// Thickness slows the crew down, so it DIVIDES productivity: at 20 mils with the
-        /// default divisor of 5 the factor is 4, and 100 SF/hr becomes 25 SF/hr. This is
-        /// the same money as multiplying the price by that factor — wage ÷ (P ÷ f) is
-        /// identically f × (wage ÷ P) — but expressed the way the trade thinks about it,
-        /// and it is the number reported as "effective productivity".
+        /// Thickness slows the crew down, so it DIVIDES productivity. This is the value
+        /// written to the intumescent PAINT line's Labor Productivity in Sage; wage still
+        /// goes to Labor Price, and Sage prices labor = wage ÷ effective-productivity.
         /// </summary>
-        public static double EffectiveProductivity(TakeoffLine line, double productivity, double wftLaborDivisor)
+        public static double EffectiveProductivity(TakeoffLine line, double productivity, double wftLaborDivisor, double volumeSolidsPercent = 65.0)
         {
             if (productivity <= 0 || line == null) return 0.0;
             if (line.Coating != CoatingType.Intumescent) return productivity;
 
-            var factor = IntumescentFactor(line, wftLaborDivisor);
-            if (factor <= 0) return 0.0;   // intumescent with no WFT is not priceable
+            var factor = IntumescentFactor(line, wftLaborDivisor, volumeSolidsPercent);
+            if (factor <= 0) return 0.0;   // intumescent with no DFT is not priceable
             return productivity / factor;
         }
 
         /// <summary>
-        /// Labor price per SF written to the item's labor UnitPrice:
+        /// Labor price per SF for previewing the member's labor:
         ///   $/SF = wage ÷ effective productivity
-        /// Zero when wage or productivity is unset, or (intumescent) WFT is unset.
+        /// Zero when wage or productivity is unset, or (intumescent) DFT is unset.
         /// </summary>
-        public static double LaborPricePerSquareFoot(TakeoffLine line, double wageRate, double productivity, double wftLaborDivisor)
+        public static double LaborPricePerSquareFoot(TakeoffLine line, double wageRate, double productivity, double wftLaborDivisor, double volumeSolidsPercent = 65.0)
         {
             if (wageRate <= 0) return 0.0;
-            var effective = EffectiveProductivity(line, productivity, wftLaborDivisor);
+            var effective = EffectiveProductivity(line, productivity, wftLaborDivisor, volumeSolidsPercent);
             if (effective <= 0) return 0.0;
             return wageRate / effective;
         }
 
         /// <summary>Total labor dollars for the line = area × price/SF.</summary>
-        public static double LaborAmount(TakeoffLine line, double wageRate, double productivity, double wftLaborDivisor)
-            => AreaSquareFeet(line) * LaborPricePerSquareFoot(line, wageRate, productivity, wftLaborDivisor);
+        public static double LaborAmount(TakeoffLine line, double wageRate, double productivity, double wftLaborDivisor, double volumeSolidsPercent = 65.0)
+            => AreaSquareFeet(line) * LaborPricePerSquareFoot(line, wageRate, productivity, wftLaborDivisor, volumeSolidsPercent);
 
         // ---- Per-member overloads ----------------------------------------
         // Labor is priced from the wage and productivity carried by the LINE. These are
@@ -125,16 +144,16 @@ namespace SteelCoatingTakeoff.Core
         // for callers that are pricing a hypothetical rather than a member.
 
         /// <summary>Effective productivity (SF/hr) using the line's own productivity.</summary>
-        public static double EffectiveProductivity(TakeoffLine line, double wftLaborDivisor)
-            => EffectiveProductivity(line, line?.Productivity ?? 0.0, wftLaborDivisor);
+        public static double EffectiveProductivity(TakeoffLine line, double wftLaborDivisor, double volumeSolidsPercent = 65.0)
+            => EffectiveProductivity(line, line?.Productivity ?? 0.0, wftLaborDivisor, volumeSolidsPercent);
 
         /// <summary>Labor price per SF using the line's own wage and productivity.</summary>
-        public static double LaborPricePerSquareFoot(TakeoffLine line, double wftLaborDivisor)
-            => LaborPricePerSquareFoot(line, line?.WageRate ?? 0.0, line?.Productivity ?? 0.0, wftLaborDivisor);
+        public static double LaborPricePerSquareFoot(TakeoffLine line, double wftLaborDivisor, double volumeSolidsPercent = 65.0)
+            => LaborPricePerSquareFoot(line, line?.WageRate ?? 0.0, line?.Productivity ?? 0.0, wftLaborDivisor, volumeSolidsPercent);
 
         /// <summary>Labor dollars using the line's own wage and productivity.</summary>
-        public static double LaborAmount(TakeoffLine line, double wftLaborDivisor)
-            => AreaSquareFeet(line) * LaborPricePerSquareFoot(line, wftLaborDivisor);
+        public static double LaborAmount(TakeoffLine line, double wftLaborDivisor, double volumeSolidsPercent = 65.0)
+            => AreaSquareFeet(line) * LaborPricePerSquareFoot(line, wftLaborDivisor, volumeSolidsPercent);
 
         /// <summary>
         /// Round for display / transmission. Sage takeoff quantities are typically
